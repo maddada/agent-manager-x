@@ -13,6 +13,7 @@ Features:
 
 - **Claude Code** - Anthropic's official CLI for Claude
 - **OpenCode** - Open-source AI coding assistant
+- **Codex** - OpenAI's coding agent CLI
 
 ## Features
 
@@ -22,13 +23,3 @@ Features:
 - Click to focus on a specific session's terminal
 - Custom session names (rename via kebab menu)
 - Quick access URL for each session (e.g., dev server links)
-
-### DMG
-
-Download the latest DMG from [Releases](https://github.com/maddada/agent-manager-x/releases).
-
-## Tech Stack
-
-- Tauri 2.x
-- React + TypeScript
-- Tailwind CSS + shadcn/ui
