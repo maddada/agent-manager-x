@@ -16,6 +16,7 @@ pub fn parse_session_file(
     project_path: &str,
     pid: u32,
     cpu_usage: f32,
+    memory_bytes: u64,
     agent_type: AgentType,
 ) -> Option<Session> {
     debug!("Parsing JSONL file: {:?}", jsonl_path);
@@ -101,9 +102,19 @@ pub fn parse_session_file(
         .unwrap_or("Unknown")
         .to_string();
 
+    let mut last_message = data.last_message;
+    let mut last_message_role = data.last_role.clone();
+
+    if should_show_last_user_message(&status, &last_message) {
+        if let Some(user_message) = data.last_user_message.clone() {
+            last_message = Some(user_message);
+            last_message_role = Some("user".to_string());
+        }
+    }
+
     // Truncate message for preview (respecting UTF-8 char boundaries)
     // Use a high limit to allow full messages in tooltips while protecting against edge cases
-    let last_message = data.last_message.map(|m| {
+    let last_message = last_message.map(|m| {
         if m.chars().count() > 5000 {
             format!("{}...", m.chars().take(5000).collect::<String>())
         } else {
@@ -123,10 +134,25 @@ pub fn parse_session_file(
         github_url,
         status,
         last_message,
-        last_message_role: data.last_role,
+        last_message_role,
         last_activity_at: data.last_timestamp.unwrap_or_else(|| "Unknown".to_string()),
         pid,
         cpu_usage,
+        memory_bytes,
         active_subagent_count: 0, // Set by find_session_for_process
+        is_background: false,
     })
+}
+
+fn should_show_last_user_message(status: &SessionStatus, last_message: &Option<String>) -> bool {
+    if !matches!(status, SessionStatus::Thinking | SessionStatus::Processing) {
+        return false;
+    }
+    match last_message.as_deref() {
+        None => true,
+        Some(message) => {
+            let trimmed = message.trim();
+            trimmed.is_empty() || trimmed.eq_ignore_ascii_case("(no content)") || trimmed.eq_ignore_ascii_case("no content")
+        }
+    }
 }

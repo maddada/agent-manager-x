@@ -14,6 +14,14 @@ export function formatTimeAgo(timestamp: string): string {
   return `${diffDays}d ago`;
 }
 
+export function formatMemory(bytes: number): string {
+  const mb = bytes / (1024 * 1024);
+  if (mb >= 1024) {
+    return `${(mb / 1024).toFixed(1)}G`;
+  }
+  return `${Math.round(mb)}M`;
+}
+
 export function truncatePath(path: string): string {
   return path.replace(/^\/Users\/[^/]+/, '~');
 }

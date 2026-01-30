@@ -33,6 +33,14 @@ pub fn run() {
         .plugin(tauri_plugin_window_state::Builder::default().build())
         .invoke_handler(tauri::generate_handler![get_all_sessions, focus_session, update_tray_title, register_shortcut, unregister_shortcut, kill_session, open_in_editor, open_in_terminal, write_debug_log, check_notification_system, install_notification_system, uninstall_notification_system, check_bell_mode, set_bell_mode])
         .setup(|app| {
+            #[cfg(target_os = "macos")]
+            {
+                // Ensure the app is treated as a regular, dock-visible application
+                // so window switchers (e.g., DockDoor) can detect it.
+                app.set_activation_policy(tauri::ActivationPolicy::Regular);
+                app.set_dock_visibility(true);
+            }
+
             // Create menu for tray
             let show_item = MenuItemBuilder::with_id("show", "Show Window")
                 .build(app)?;

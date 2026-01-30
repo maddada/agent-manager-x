@@ -20,6 +20,7 @@ impl AgentDetector for ClaudeDetector {
             .map(|p| AgentProcess {
                 pid: p.pid,
                 cpu_usage: p.cpu_usage,
+                memory_bytes: p.memory,
                 cwd: p.cwd,
             })
             .collect()

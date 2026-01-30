@@ -103,6 +103,8 @@ pub fn build_session(
         last_activity_at,
         pid: process.pid,
         cpu_usage: process.cpu_usage,
+        memory_bytes: process.memory_bytes,
         active_subagent_count: 0,
+        is_background: false,
     }
 }

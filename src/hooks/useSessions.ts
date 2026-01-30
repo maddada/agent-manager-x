@@ -9,12 +9,14 @@ export type AgentCounts = Record<AgentType, number>;
 
 export function useSessions() {
   const [sessions, setSessions] = useState<Session[]>([]);
+  const [backgroundSessions, setBackgroundSessions] = useState<Session[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [waitingCount, setWaitingCount] = useState(0);
   const [agentCounts, setAgentCounts] = useState<AgentCounts>({ claude: 0, codex: 0, opencode: 0 });
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const sessionsRef = useRef<Session[]>([]);
+  const backgroundRef = useRef<Session[]>([]);
 
   const updateTrayTitle = useCallback(async (total: number, waiting: number) => {
     try {
@@ -27,10 +29,19 @@ export function useSessions() {
   const fetchSessions = useCallback(async () => {
     try {
       const response = await invoke<SessionsResponse>('get_all_sessions');
+      const background = response.backgroundSessions?.length
+        ? response.backgroundSessions
+        : response.sessions.filter((session) => session.isBackground);
+      const visibleSessions = response.backgroundSessions?.length
+        ? response.sessions
+        : response.sessions.filter((session) => !session.isBackground);
+
       // Merge with stable ordering to prevent unnecessary reordering
-      const stableSessions = mergeWithStableOrder(sessionsRef.current, response.sessions);
+      const stableSessions = mergeWithStableOrder(sessionsRef.current, visibleSessions);
       sessionsRef.current = stableSessions;
       setSessions([...stableSessions]);
+      backgroundRef.current = background;
+      setBackgroundSessions(background);
       setTotalCount(response.totalCount);
       setWaitingCount(response.waitingCount);
 
@@ -72,6 +83,25 @@ export function useSessions() {
       )
     );
     // Refresh to update the UI (don't await - let polling handle eventual consistency)
+    fetchSessions();
+  }, [fetchSessions]);
+
+  const killBackgroundSession = useCallback(async (pid: number) => {
+    try {
+      await invoke('kill_session', { pid });
+    } catch (err) {
+      console.error(`Failed to kill background session ${pid}:`, err);
+    }
+    fetchSessions();
+  }, [fetchSessions]);
+
+  const killAllBackgroundSessions = useCallback(async () => {
+    const sessionsToKill = backgroundRef.current;
+    sessionsToKill.forEach((session) =>
+      invoke('kill_session', { pid: session.pid }).catch((err) =>
+        console.error(`Failed to kill background session ${session.pid}:`, err)
+      )
+    );
     fetchSessions();
   }, [fetchSessions]);
 
@@ -122,6 +152,7 @@ export function useSessions() {
 
   return {
     sessions,
+    backgroundSessions,
     totalCount,
     waitingCount,
     agentCounts,
@@ -130,6 +161,8 @@ export function useSessions() {
     refresh: fetchSessions,
     focusSession,
     killSessionsByType,
+    killBackgroundSession,
+    killAllBackgroundSessions,
     killInactiveSessions,
     killStaleSessions,
     getInactiveCount,

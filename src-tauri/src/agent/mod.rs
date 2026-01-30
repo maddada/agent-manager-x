@@ -9,6 +9,7 @@ use crate::session::{Session, SessionsResponse, AgentType};
 pub struct AgentProcess {
     pub pid: u32,
     pub cpu_usage: f32,
+    pub memory_bytes: u64,
     pub cwd: Option<std::path::PathBuf>,
 }
 
@@ -47,8 +48,18 @@ pub fn get_all_sessions() -> SessionsResponse {
         all_sessions.extend(sessions);
     }
 
-    // Sort by status priority first, then by most recent activity
-    all_sessions.sort_by(|a, b| {
+    let mut foreground_sessions = Vec::new();
+    let mut background_sessions = Vec::new();
+    for session in all_sessions {
+        if session.is_background {
+            background_sessions.push(session);
+        } else {
+            foreground_sessions.push(session);
+        }
+    }
+
+    // Sort foreground by status priority first, then by most recent activity
+    foreground_sessions.sort_by(|a, b| {
         let priority_a = status_sort_priority(&a.status);
         let priority_b = status_sort_priority(&b.status);
 
@@ -59,13 +70,31 @@ pub fn get_all_sessions() -> SessionsResponse {
         }
     });
 
-    let waiting_count = all_sessions.iter()
+    // Sort background by agent type then by most recent activity
+    let agent_sort_key = |agent_type: &AgentType| match agent_type {
+        AgentType::Claude => 0,
+        AgentType::Codex => 1,
+        AgentType::OpenCode => 2,
+    };
+
+    background_sessions.sort_by(|a, b| {
+        let key_a = agent_sort_key(&a.agent_type);
+        let key_b = agent_sort_key(&b.agent_type);
+        if key_a != key_b {
+            key_a.cmp(&key_b)
+        } else {
+            b.last_activity_at.cmp(&a.last_activity_at)
+        }
+    });
+
+    let waiting_count = foreground_sessions.iter()
         .filter(|s| matches!(s.status, crate::session::SessionStatus::Waiting))
         .count();
-    let total_count = all_sessions.len();
+    let total_count = foreground_sessions.len();
 
     SessionsResponse {
-        sessions: all_sessions,
+        sessions: foreground_sessions,
+        background_sessions,
         total_count,
         waiting_count,
     }

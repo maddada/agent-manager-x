@@ -19,6 +19,7 @@ pub struct ExtractedMessageData {
     pub git_branch: Option<String>,
     pub last_timestamp: Option<String>,
     pub last_message: Option<String>,
+    pub last_user_message: Option<String>,
     pub last_role: Option<String>,
     pub last_msg_type: Option<String>,
     pub last_has_tool_use: bool,
@@ -36,6 +37,7 @@ pub fn extract_message_data(jsonl_path: &PathBuf) -> Option<ExtractedMessageData
     let mut git_branch = None;
     let mut last_timestamp = None;
     let mut last_message = None;
+    let mut last_user_message = None;
     let mut last_role = None;
     let mut last_msg_type = None;
     let mut last_has_tool_use = false;
@@ -104,7 +106,7 @@ pub fn extract_message_data(jsonl_path: &PathBuf) -> Option<ExtractedMessageData
         }
     }
 
-    // Now find the last meaningful text message (keep looking even after finding status)
+    // Now find the last meaningful text message and last user message
     for line in last_lines.iter().rev() {
         if let Ok(msg) = serde_json::from_str::<JsonlMessage>(line) {
             if let Some(content) = &msg.message {
@@ -121,9 +123,16 @@ pub fn extract_message_data(jsonl_path: &PathBuf) -> Option<ExtractedMessageData
                         _ => None,
                     };
 
-                    if text.is_some() {
-                        last_message = text;
-                        break;
+                    if let Some(text) = text {
+                        if last_message.is_none() {
+                            last_message = Some(text.clone());
+                        }
+                        if content.role.as_deref() == Some("user") && last_user_message.is_none() {
+                            last_user_message = Some(text.clone());
+                        }
+                        if last_message.is_some() && last_user_message.is_some() {
+                            break;
+                        }
                     }
                 }
             }
@@ -135,6 +144,7 @@ pub fn extract_message_data(jsonl_path: &PathBuf) -> Option<ExtractedMessageData
         git_branch,
         last_timestamp,
         last_message,
+        last_user_message,
         last_role,
         last_msg_type,
         last_has_tool_use,

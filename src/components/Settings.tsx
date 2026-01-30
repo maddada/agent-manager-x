@@ -53,12 +53,12 @@ export function Settings({ isOpen, onClose }: SettingsProps) {
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className='sm:max-w-[420px] gap-6'>
-        <DialogHeader>
+      <DialogContent className='sm:max-w-[420px] gap-0 max-h-[90vh] overflow-hidden flex flex-col p-0'>
+        <DialogHeader className='px-6 pt-6 pb-4'>
           <DialogTitle>Settings</DialogTitle>
         </DialogHeader>
 
-        <div className='space-y-6'>
+        <div className='space-y-6 overflow-y-auto px-6 pb-6 thin-scrollbar'>
           <ThemeSelector theme={settings.theme} onThemeChange={settings.handleThemeChange} />
 
           <BackgroundSettings

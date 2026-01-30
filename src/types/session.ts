@@ -15,11 +15,14 @@ export interface Session {
   lastActivityAt: string;
   pid: number;
   cpuUsage: number;
+  memoryBytes: number;
   activeSubagentCount: number;
+  isBackground: boolean;
 }
 
 export interface SessionsResponse {
   sessions: Session[];
+  backgroundSessions: Session[];
   totalCount: number;
   waitingCount: number;
 }

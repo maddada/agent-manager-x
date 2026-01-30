@@ -27,14 +27,16 @@ pub fn find_codex_processes() -> Vec<AgentProcess> {
             let cpu = process.cpu_usage();
             let cwd = process.cwd().map(|p| p.to_path_buf());
             log::debug!(
-                "Codex process: pid={}, cpu={:.1}%, cwd={:?}",
+                "Codex process: pid={}, cpu={:.1}%, mem={}MB, cwd={:?}",
                 pid.as_u32(),
                 cpu,
+                process.memory() / 1024 / 1024,
                 cwd
             );
             processes.push(AgentProcess {
                 pid: pid.as_u32(),
                 cpu_usage: cpu,
+                memory_bytes: process.memory(),
                 cwd,
             });
         }

@@ -10,6 +10,7 @@ function App() {
   const [defaultEditor, setDefaultEditor] = useState<DefaultEditor>(() => getDefaultEditor());
   const {
     sessions,
+    backgroundSessions,
     totalCount,
     waitingCount,
     agentCounts,
@@ -17,6 +18,8 @@ function App() {
     error,
     refresh,
     killSessionsByType,
+    killBackgroundSession,
+    killAllBackgroundSessions,
     killInactiveSessions,
     killStaleSessions,
     getInactiveCount,
@@ -40,17 +43,20 @@ function App() {
   }, [showSettings]);
 
   return (
-    <div className='min-h-screen bg-background flex flex-col select-none'>
+    <div className='h-screen bg-background flex flex-col select-none overflow-hidden'>
       <AppHeader
         totalCount={totalCount}
         waitingCount={waitingCount}
         agentCounts={agentCounts}
+        backgroundSessions={backgroundSessions}
         isLoading={isLoading}
         getInactiveCount={getInactiveCount}
         getStaleCount={getStaleCount}
         killInactiveSessions={killInactiveSessions}
         killStaleSessions={killStaleSessions}
         killSessionsByType={killSessionsByType}
+        killBackgroundSession={killBackgroundSession}
+        killAllBackgroundSessions={killAllBackgroundSessions}
         onSettingsClick={() => setShowSettings(true)}
         onRefresh={refresh}
         notificationInstalled={notifications.notificationInstalled}

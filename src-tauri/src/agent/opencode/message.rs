@@ -39,6 +39,7 @@ pub fn get_last_message(
     // Find the first message with displayable text (skip system prompts)
     for (role, message_id, time) in messages {
         if let Some(text) = get_message_text(storage_path, &message_id) {
+            let preview = truncate_chars(&text, 50);
             log::debug!(
                 "Session {} has {} messages, showing: id={}, role={}, created={}, text={:?}",
                 session_id,
@@ -46,7 +47,7 @@ pub fn get_last_message(
                 message_id,
                 role,
                 time,
-                &text[..text.len().min(50)]
+                preview
             );
             return (Some(role), Some(text), time);
         }
@@ -103,11 +104,21 @@ fn get_message_text(storage_path: &PathBuf, message_id: &str) -> Option<String> 
     }
 
     // Truncate if too long
-    let truncated = if content.len() > 200 {
-        format!("{}...", &content[..197])
-    } else {
-        content
-    };
+    Some(truncate_chars(&content, 200))
+}
 
-    Some(truncated)
+fn truncate_chars(text: &str, max_chars: usize) -> String {
+    let mut chars = text.chars();
+    let mut buf = String::new();
+    for _ in 0..max_chars {
+        if let Some(c) = chars.next() {
+            buf.push(c);
+        } else {
+            return text.to_string();
+        }
+    }
+    if chars.next().is_some() {
+        buf.push_str("...");
+    }
+    buf
 }

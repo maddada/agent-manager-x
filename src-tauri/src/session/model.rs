@@ -25,7 +25,9 @@ pub struct Session {
     pub last_activity_at: String,
     pub pid: u32,
     pub cpu_usage: f32,
+    pub memory_bytes: u64,
     pub active_subagent_count: usize,
+    pub is_background: bool,
 }
 
 /// Status of a Claude Code session
@@ -44,6 +46,7 @@ pub enum SessionStatus {
 #[serde(rename_all = "camelCase")]
 pub struct SessionsResponse {
     pub sessions: Vec<Session>,
+    pub background_sessions: Vec<Session>,
     pub total_count: usize,
     pub waiting_count: usize,
 }

@@ -78,37 +78,45 @@ static LOGGER: std::sync::OnceLock<FileLogger> = std::sync::OnceLock::new();
 
 /// Initialize the logger. Only logs in debug builds.
 pub fn init() -> Result<(), SetLoggerError> {
-    #[cfg(debug_assertions)]
-    {
-        let logger = LOGGER.get_or_init(FileLogger::new);
-
-        // Clear the log file on startup
-        if let Ok(file) = File::create(&logger.log_path) {
-            drop(file);
-        }
-
-        // Reinitialize file handle after clearing
-        if let Ok(mut guard) = logger.file.lock() {
-            *guard = OpenOptions::new()
-                .create(true)
-                .append(true)
-                .open(&logger.log_path)
-                .ok();
-        }
-
-        log::set_logger(logger)?;
-        log::set_max_level(LevelFilter::Debug);
-
-        log::info!("=== Agent Manager X Debug Log Started ===");
-        log::info!("Log file: {:?}", logger.log_path);
-    }
-
-    #[cfg(not(debug_assertions))]
-    {
+    let enabled = cfg!(debug_assertions) || env_logging_enabled();
+    if !enabled {
         log::set_max_level(LevelFilter::Off);
+        return Ok(());
     }
+
+    let logger = LOGGER.get_or_init(FileLogger::new);
+
+    // Clear the log file on startup
+    if let Ok(file) = File::create(&logger.log_path) {
+        drop(file);
+    }
+
+    // Reinitialize file handle after clearing
+    if let Ok(mut guard) = logger.file.lock() {
+        *guard = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&logger.log_path)
+            .ok();
+    }
+
+    log::set_logger(logger)?;
+    log::set_max_level(LevelFilter::Debug);
+
+    log::info!("=== Agent Manager X Debug Log Started ===");
+    log::info!("Log file: {:?}", logger.log_path);
 
     Ok(())
+}
+
+fn env_logging_enabled() -> bool {
+    std::env::var("AMX_DEBUG_LOG")
+        .or_else(|_| std::env::var("AGENT_MANAGER_X_DEBUG_LOG"))
+        .map(|value| {
+            let trimmed = value.trim();
+            !trimmed.is_empty() && trimmed != "0"
+        })
+        .unwrap_or(false)
 }
 
 /// Get the path to the log file

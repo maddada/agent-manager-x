@@ -3,7 +3,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { formatTimeAgo, statusConfig } from '@/lib/formatters';
+import { formatTimeAgo, formatMemory, statusConfig } from '@/lib/formatters';
 import { type DefaultEditor } from './Settings';
 import { useSessionCard } from '@/hooks/useSessionCard';
 import { AgentStatusIcon, RenameDialog, UrlDialog, SessionCardContextMenu } from './session-card';
@@ -134,8 +134,15 @@ export function SessionCard({ session, defaultEditor, onKill }: SessionCardProps
               )}
             </div>
 
+            {/* Process stats */}
+            <div className='flex items-center gap-3 pt-2 mt-2 border-t border-border/50 text-[10px] text-muted-foreground font-mono'>
+              <span>PID {session.pid}</span>
+              <span>CPU {session.cpuUsage.toFixed(0)}%</span>
+              <span>MEM {formatMemory(session.memoryBytes)}</span>
+            </div>
+
             {/* Footer: Status Badge + Time */}
-            <div className='flex items-center justify-between pt-3 mt-3 border-t border-border'>
+            <div className='flex items-center justify-between pt-2 mt-1 border-t border-border'>
               <div className='flex items-center gap-2'>
                 <Badge variant='outline' className={config.badgeClassName}>
                   {config.label}
