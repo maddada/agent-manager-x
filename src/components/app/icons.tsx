@@ -76,3 +76,15 @@ export const VoiceIcon: React.FC<IconProps> = ({ className = 'w-4 h-4' }) => (
     />
   </svg>
 );
+
+export const ListViewIcon: React.FC<IconProps> = ({ className = 'w-4 h-4' }) => (
+  <svg className={className} fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+    <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01' />
+  </svg>
+);
+
+export const GridViewIcon: React.FC<IconProps> = ({ className = 'w-4 h-4' }) => (
+  <svg className={className} fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+    <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z' />
+  </svg>
+);

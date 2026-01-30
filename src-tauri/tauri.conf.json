@@ -18,6 +18,7 @@
         "height": 700,
         "minWidth": 700,
         "minHeight": 400,
+        "zoomHotkeysEnabled": true,
         "resizable": true,
         "fullscreen": false,
         "visible": true,

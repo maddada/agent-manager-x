@@ -47,6 +47,9 @@ export function SessionCard({ session, defaultEditor, onKill }: SessionCardProps
   }
 
   const config = statusConfig[session.status];
+  const hasMessage = !!session.lastMessage && session.lastMessage.trim().length > 0;
+  const fallbackMessage =
+    session.status === 'idle' || session.status === 'stale' ? 'No recent messages' : config.label;
 
   return (
     <>
@@ -117,7 +120,7 @@ export function SessionCard({ session, defaultEditor, onKill }: SessionCardProps
           <CardContent className='p-4 flex flex-col flex-1'>
             {/* Message Preview */}
             <div className='flex-1'>
-              {session.lastMessage && (
+              {hasMessage ? (
                 <TooltipProvider delayDuration={600}>
                   <Tooltip>
                     <TooltipTrigger asChild>
@@ -131,18 +134,13 @@ export function SessionCard({ session, defaultEditor, onKill }: SessionCardProps
                     </TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
+              ) : (
+                <div className='text-sm text-foreground/70 line-clamp-3 leading-relaxed'>{fallbackMessage}</div>
               )}
             </div>
 
-            {/* Process stats */}
-            <div className='flex items-center gap-3 pt-2 mt-2 border-t border-border/50 text-[10px] text-muted-foreground font-mono'>
-              <span>PID {session.pid}</span>
-              <span>CPU {session.cpuUsage.toFixed(0)}%</span>
-              <span>MEM {formatMemory(session.memoryBytes)}</span>
-            </div>
-
             {/* Footer: Status Badge + Time */}
-            <div className='flex items-center justify-between pt-2 mt-1 border-t border-border'>
+            <div className='flex items-center justify-between pt-3 mt-3 border-t border-border'>
               <div className='flex items-center gap-2'>
                 <Badge variant='outline' className={config.badgeClassName}>
                   {config.label}
@@ -151,7 +149,12 @@ export function SessionCard({ session, defaultEditor, onKill }: SessionCardProps
                   <span className='text-xs text-muted-foreground'>[+{session.activeSubagentCount}]</span>
                 )}
               </div>
-              <span className='text-xs text-foreground'>{formatTimeAgo(session.lastActivityAt)}</span>
+              <div className='flex items-center gap-2 text-xs'>
+                <span className='text-muted-foreground'>PID {session.pid}</span>
+                <span className='text-muted-foreground'>{session.cpuUsage.toFixed(0)}%</span>
+                <span className='text-muted-foreground'>{formatMemory(session.memoryBytes)}</span>
+                <span className='text-foreground'>{formatTimeAgo(session.lastActivityAt)}</span>
+              </div>
             </div>
           </CardContent>
         </Card>

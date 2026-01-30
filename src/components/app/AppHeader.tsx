@@ -10,8 +10,9 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { SettingsIcon, RefreshIcon, BellIcon, VoiceIcon } from './icons';
+import { SettingsIcon, RefreshIcon, BellIcon, VoiceIcon, ListViewIcon, GridViewIcon } from './icons';
 import type { AgentType, Session } from '@/types/session';
+import type { DisplayMode } from '@/lib/settings';
 
 export type AppHeaderProps = {
   totalCount: number;
@@ -32,6 +33,8 @@ export type AppHeaderProps = {
   bellMode: boolean;
   bellModeLoading: boolean;
   onBellModeToggle: () => void;
+  displayMode: DisplayMode;
+  onDisplayModeToggle: () => void;
 };
 
 const AGENT_TYPES: AgentType[] = ['claude', 'codex', 'opencode'];
@@ -55,6 +58,8 @@ export function AppHeader({
   bellMode,
   bellModeLoading,
   onBellModeToggle,
+  displayMode,
+  onDisplayModeToggle,
 }: AppHeaderProps) {
   const inactiveCount = getInactiveCount();
   const staleCount = getStaleCount();
@@ -94,7 +99,7 @@ export function AppHeader({
               <DropdownMenu>
                 <TooltipTrigger asChild>
                   <DropdownMenuTrigger asChild>
-                    <Button variant='ghost' size='sm' className='h-7 text-xs gap-1' title='Background processes'>
+                    <Button variant='ghost' size='sm' className='h-7 text-xs gap-1'>
                       <span>BG</span>
                       <Badge variant='secondary' className='h-4 px-1 text-[10px] font-medium'>
                         {backgroundCount}
@@ -129,8 +134,7 @@ export function AppHeader({
                             e.stopPropagation();
                             killBackgroundSession(session.pid);
                           }}
-                          className='inline-flex h-6 w-6 items-center justify-center rounded-full text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors'
-                          title='Close background process'
+                          className='cursor-pointer inline-flex h-6 w-6 items-center justify-center rounded-full text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors'
                         >
                           <svg className='h-3.5 w-3.5' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
                             <path
@@ -235,6 +239,15 @@ export function AppHeader({
             </Button>
           </>
         )}
+
+        <Button
+          variant='ghost'
+          size='icon-sm'
+          onClick={onDisplayModeToggle}
+          title={displayMode === 'list' ? 'Switch to masonry view' : 'Switch to list view'}
+        >
+          {displayMode === 'list' ? <GridViewIcon /> : <ListViewIcon />}
+        </Button>
 
         <div className='w-px h-5 bg-border mx-1' />
 

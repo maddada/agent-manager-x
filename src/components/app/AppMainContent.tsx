@@ -1,14 +1,17 @@
-// App main content area with session grid, error state, and empty state
+// App main content area with session views, error state, and empty state
 
 import { SessionGrid } from '@/components/SessionGrid';
+import { SessionList } from '@/components/SessionList';
 import { ErrorIcon, EmptyStateIcon } from './icons';
 import type { Session } from '@/types/session';
 import type { DefaultEditor } from '@/lib/settings';
+import type { DisplayMode } from '@/lib/settings';
 
 export type AppMainContentProps = {
   sessions: Session[];
   error: string | null;
   defaultEditor: DefaultEditor;
+  displayMode: DisplayMode;
   onRefresh: () => void;
 };
 
@@ -37,7 +40,7 @@ function EmptyState() {
   );
 }
 
-export function AppMainContent({ sessions, error, defaultEditor, onRefresh }: AppMainContentProps) {
+export function AppMainContent({ sessions, error, defaultEditor, displayMode, onRefresh }: AppMainContentProps) {
   return (
     <main className='flex-1 overflow-y-auto p-6'>
       {error ? (
@@ -45,7 +48,13 @@ export function AppMainContent({ sessions, error, defaultEditor, onRefresh }: Ap
       ) : sessions.length === 0 ? (
         <EmptyState />
       ) : (
-        <SessionGrid sessions={sessions} defaultEditor={defaultEditor} onRefresh={onRefresh} />
+        <>
+          {displayMode === 'list' ? (
+            <SessionList sessions={sessions} defaultEditor={defaultEditor} onRefresh={onRefresh} />
+          ) : (
+            <SessionGrid sessions={sessions} defaultEditor={defaultEditor} onRefresh={onRefresh} />
+          )}
+        </>
       )}
     </main>
   );

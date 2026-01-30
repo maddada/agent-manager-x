@@ -4,17 +4,20 @@ import {
   type DefaultEditor,
   type DefaultTerminal,
   type CardClickAction,
+  type DisplayMode,
   type ThemeName,
   EDITOR_STORAGE_KEY,
   CUSTOM_EDITOR_COMMAND_KEY,
   TERMINAL_STORAGE_KEY,
   CUSTOM_TERMINAL_COMMAND_KEY,
   CLICK_ACTION_STORAGE_KEY,
+  DISPLAY_MODE_STORAGE_KEY,
   THEME_STORAGE_KEY,
   BACKGROUND_IMAGE_STORAGE_KEY,
   OVERLAY_OPACITY_STORAGE_KEY,
   OVERLAY_COLOR_STORAGE_KEY,
   DEFAULT_EDITOR,
+  DEFAULT_DISPLAY_MODE,
   DEFAULT_OVERLAY_OPACITY,
   DEFAULT_OVERLAY_COLOR,
   DEFAULT_BACKGROUND_IMAGE,
@@ -78,6 +81,19 @@ export function getCardClickAction(): CardClickAction {
 
 export function setCardClickAction(action: CardClickAction) {
   localStorage.setItem(CLICK_ACTION_STORAGE_KEY, action);
+}
+
+// Display mode storage
+export function getDisplayMode(): DisplayMode {
+  const saved = localStorage.getItem(DISPLAY_MODE_STORAGE_KEY);
+  if (saved === 'list' || saved === 'masonry') {
+    return saved;
+  }
+  return DEFAULT_DISPLAY_MODE;
+}
+
+export function setDisplayMode(mode: DisplayMode) {
+  localStorage.setItem(DISPLAY_MODE_STORAGE_KEY, mode);
 }
 
 // Theme storage

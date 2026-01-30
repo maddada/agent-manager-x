@@ -1,31 +1,22 @@
 import { useMemo, useState } from 'react';
-import Masonry from 'react-masonry-css';
 import { invoke } from '@tauri-apps/api/core';
 import { Session } from '../types/session';
-import { SessionCard } from './SessionCard';
+import { SessionListItem } from './SessionListItem';
 import { type DefaultEditor, getCardClickAction, getDefaultTerminal, getCustomEditorCommand, getCustomTerminalCommand } from './Settings';
 import { groupSessionsByProject, type ProjectGroup } from '@/lib/sessionGrouping';
 import { truncatePath } from '@/lib/formatters';
 
-type SessionGridProps = {
+type SessionListProps = {
   sessions: Session[];
   defaultEditor: DefaultEditor;
   onRefresh: () => void;
 };
 
-const masonryBreakpoints = {
-  default: 3,
-  1024: 3,
-  768: 2,
-  640: 1,
-};
-
-export function SessionGrid({ sessions, defaultEditor, onRefresh }: SessionGridProps) {
+export function SessionList({ sessions, defaultEditor, onRefresh }: SessionListProps) {
   const [killingGroups, setKillingGroups] = useState<Set<string>>(new Set());
 
   const handleKillGroup = async (group: ProjectGroup) => {
     setKillingGroups((prev) => new Set(prev).add(group.projectPath));
-    // Kill all sessions in parallel for speed
     await Promise.all(
       group.sessions.map((session) =>
         invoke('kill_session', { pid: session.pid }).catch((error) =>
@@ -33,7 +24,6 @@ export function SessionGrid({ sessions, defaultEditor, onRefresh }: SessionGridP
         )
       )
     );
-    // Immediately refresh to update UI
     onRefresh();
   };
 
@@ -68,18 +58,16 @@ export function SessionGrid({ sessions, defaultEditor, onRefresh }: SessionGridP
   const projectGroups = useMemo(() => groupSessionsByProject(sessions), [sessions]);
 
   return (
-    <Masonry breakpointCols={masonryBreakpoints} className='flex -ml-4 w-auto' columnClassName='pl-4 bg-clip-padding'>
+    <div className='space-y-4'>
       {projectGroups.map((group) => (
         <div
           key={group.projectPath}
-          className={`group/project relative mb-4 rounded-xl border p-3 space-y-3 transition-opacity duration-200 ${group.color} ${killingGroups.has(group.projectPath) ? 'opacity-50' : ''}`}
+          className={`group/project relative rounded-xl border ${group.color} ${killingGroups.has(group.projectPath) ? 'opacity-50' : ''}`}
         >
-          {/* Project header - always show, clickable */}
           <div
-            className='group/header w-full px-1 pb-2 border-b border-white/5 cursor-pointer hover:opacity-80 transition-opacity'
+            className='group/header w-full px-3 py-2 border-b border-white/5 cursor-pointer hover:opacity-80 transition-opacity'
             onClick={() => handleGroupClick(group)}
           >
-            {/* Kill group button - top left corner outside, only on header hover */}
             <button
               onClick={(event) => {
                 event.stopPropagation();
@@ -93,36 +81,39 @@ export function SessionGrid({ sessions, defaultEditor, onRefresh }: SessionGridP
               </svg>
             </button>
 
-            <h2 className='text-lg font-semibold text-foreground truncate'>{group.projectName}</h2>
-            <p className='text-sm text-muted-foreground truncate mt-1.5'>{truncatePath(group.projectPath)}</p>
-            <div className='flex items-center gap-3 mt-1 text-sm text-muted-foreground'>
-              {group.sessions[0].gitBranch && (
-                <div className='flex items-center gap-1'>
-                  <svg className='w-3 h-3' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
-                    <path
-                      strokeLinecap='round'
-                      strokeLinejoin='round'
-                      strokeWidth={2}
-                      d='M6 3v12M18 9a3 3 0 100-6 3 3 0 000 6zM6 21a3 3 0 100-6 3 3 0 000 6zM18 9a9 9 0 01-9 9'
-                    />
-                  </svg>
-                  <span>{group.sessions[0].gitBranch}</span>
-                </div>
-              )}
-              <span>
-                {group.sessions.length} {group.sessions.length === 1 ? 'session' : 'sessions'}
-              </span>
+            <div className='flex items-start justify-between gap-4'>
+              <div className='min-w-0'>
+                <h2 className='text-base font-semibold text-foreground truncate'>{group.projectName}</h2>
+                <p className='text-xs text-muted-foreground truncate mt-1'>{truncatePath(group.projectPath)}</p>
+              </div>
+              <div className='flex items-center gap-3 text-xs text-muted-foreground whitespace-nowrap'>
+                {group.sessions[0].gitBranch && (
+                  <div className='flex items-center gap-1'>
+                    <svg className='w-3 h-3' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+                      <path
+                        strokeLinecap='round'
+                        strokeLinejoin='round'
+                        strokeWidth={2}
+                        d='M6 3v12M18 9a3 3 0 100-6 3 3 0 000 6zM6 21a3 3 0 100-6 3 3 0 000 6zM18 9a9 9 0 01-9 9'
+                      />
+                    </svg>
+                    <span>{group.sessions[0].gitBranch}</span>
+                  </div>
+                )}
+                <span>
+                  {group.sessions.length} {group.sessions.length === 1 ? 'session' : 'sessions'}
+                </span>
+              </div>
             </div>
           </div>
 
-          {/* Session cards */}
-          <div className='space-y-4'>
+          <div className='p-2 space-y-2'>
             {group.sessions.map((session) => (
-              <SessionCard key={session.id} session={session} defaultEditor={defaultEditor} onKill={onRefresh} />
+              <SessionListItem key={session.id} session={session} defaultEditor={defaultEditor} onKill={onRefresh} />
             ))}
           </div>
         </div>
       ))}
-    </Masonry>
+    </div>
   );
 }

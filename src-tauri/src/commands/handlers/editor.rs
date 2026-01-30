@@ -2,6 +2,39 @@
 
 use std::process::Command;
 
+/// Get the full PATH from the user's login shell.
+/// Bundled macOS apps inherit a minimal PATH (/usr/bin:/bin:/usr/sbin:/sbin),
+/// so editor CLIs installed via Homebrew or app installers won't be found.
+/// We resolve this by asking the login shell for its PATH, with static extras as fallback.
+fn enriched_path() -> String {
+    // Try to get the full PATH from the user's default login shell
+    if let Ok(output) = Command::new("/bin/zsh")
+        .args(["-l", "-c", "echo $PATH"])
+        .output()
+    {
+        let shell_path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        if !shell_path.is_empty() {
+            return shell_path;
+        }
+    }
+
+    // Fallback: prepend common locations to the current PATH
+    let base = std::env::var("PATH").unwrap_or_default();
+    let home = std::env::var("HOME").unwrap_or_default();
+    let mut parts = vec![
+        "/usr/local/bin".to_string(),
+        "/opt/homebrew/bin".to_string(),
+        "/opt/homebrew/sbin".to_string(),
+    ];
+    if !home.is_empty() {
+        parts.push(format!("{}/.local/bin", home));
+    }
+    if !base.is_empty() {
+        parts.push(base);
+    }
+    parts.join(":")
+}
+
 /// Open a project path in an editor
 #[tauri::command]
 pub fn open_in_editor(path: String, editor: String) -> Result<(), String> {
@@ -19,6 +52,7 @@ pub fn open_in_editor(path: String, editor: String) -> Result<(), String> {
 
     Command::new(cmd)
         .arg(&path)
+        .env("PATH", enriched_path())
         .spawn()
         .map_err(|e| format!("Failed to open {} in {}: {}", path, editor, e))?;
 
@@ -55,6 +89,7 @@ pub fn open_in_terminal(path: String, terminal: String) -> Result<(), String> {
         "kitty" => {
             Command::new("kitty")
                 .args(["--directory", &path])
+                .env("PATH", enriched_path())
                 .spawn()
                 .map_err(|e| format!("Failed to open Kitty: {}", e))?;
         }
@@ -81,6 +116,7 @@ pub fn open_in_terminal(path: String, terminal: String) -> Result<(), String> {
         "alacritty" => {
             Command::new("alacritty")
                 .args(["--working-directory", &path])
+                .env("PATH", enriched_path())
                 .spawn()
                 .map_err(|e| format!("Failed to open Alacritty: {}", e))?;
         }
@@ -100,6 +136,7 @@ pub fn open_in_terminal(path: String, terminal: String) -> Result<(), String> {
                 // Fall back to running the command directly with path as argument
                 Command::new(custom)
                     .arg(&path)
+                    .env("PATH", enriched_path())
                     .spawn()
                     .map_err(|e| format!("Failed to open {}: {}", custom, e))?;
             }

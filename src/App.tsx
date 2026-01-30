@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { AppHeader, AppMainContent } from './components/app';
-import { Settings, useHotkeyInit, getDefaultEditor, type DefaultEditor } from './components/Settings';
+import { Settings, useHotkeyInit, getDefaultEditor, getDisplayMode, setDisplayMode, type DefaultEditor, type DisplayMode } from './components/Settings';
 import { useSessions } from './hooks/useSessions';
 import { useAppInitialization } from './hooks/useAppInitialization';
 import { useNotifications } from './hooks/useNotifications';
@@ -8,6 +8,7 @@ import { useNotifications } from './hooks/useNotifications';
 function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [defaultEditor, setDefaultEditor] = useState<DefaultEditor>(() => getDefaultEditor());
+  const [displayMode, setDisplayModeState] = useState<DisplayMode>(() => getDisplayMode());
   const {
     sessions,
     backgroundSessions,
@@ -42,6 +43,14 @@ function App() {
     }
   }, [showSettings]);
 
+  const handleDisplayModeToggle = () => {
+    setDisplayModeState((prev) => {
+      const next = prev === 'list' ? 'masonry' : 'list';
+      setDisplayMode(next);
+      return next;
+    });
+  };
+
   return (
     <div className='h-screen bg-background flex flex-col select-none overflow-hidden'>
       <AppHeader
@@ -63,6 +72,8 @@ function App() {
         bellMode={notifications.bellMode}
         bellModeLoading={notifications.bellModeLoading}
         onBellModeToggle={notifications.handleBellModeToggle}
+        displayMode={displayMode}
+        onDisplayModeToggle={handleDisplayModeToggle}
       />
 
       {/* Settings Modal */}
@@ -72,6 +83,7 @@ function App() {
         sessions={sessions}
         error={error}
         defaultEditor={defaultEditor}
+        displayMode={displayMode}
         onRefresh={refresh}
       />
     </div>

@@ -3,6 +3,7 @@
 export type DefaultEditor = 'zed' | 'code' | 'cursor' | 'sublime' | 'neovim' | 'webstorm' | 'idea' | 'custom';
 export type DefaultTerminal = 'ghostty' | 'iterm' | 'kitty' | 'terminal' | 'warp' | 'alacritty' | 'hyper' | 'custom';
 export type CardClickAction = 'editor' | 'terminal';
+export type DisplayMode = 'masonry' | 'list';
 export type ThemeName =
   | 'default'
   | 'catppuccin'
@@ -41,6 +42,7 @@ export const CUSTOM_EDITOR_COMMAND_KEY = 'agent-manager-x-custom-editor-command'
 export const TERMINAL_STORAGE_KEY = 'agent-manager-x-default-terminal';
 export const CUSTOM_TERMINAL_COMMAND_KEY = 'agent-manager-x-custom-terminal-command';
 export const CLICK_ACTION_STORAGE_KEY = 'agent-manager-x-click-action';
+export const DISPLAY_MODE_STORAGE_KEY = 'agent-manager-x-display-mode';
 export const THEME_STORAGE_KEY = 'agent-manager-x-theme';
 export const BACKGROUND_IMAGE_STORAGE_KEY = 'agent-manager-x-background-image';
 export const OVERLAY_OPACITY_STORAGE_KEY = 'agent-manager-x-overlay-opacity';
@@ -53,6 +55,7 @@ export const DEFAULT_OVERLAY_COLOR = '#000000';
 export const DEFAULT_BACKGROUND_IMAGE = 'https://images.pexels.com/photos/28428592/pexels-photo-28428592.jpeg';
 export const DEFAULT_THEME: ThemeName = 'ayu';
 export const DEFAULT_EDITOR: DefaultEditor = 'code';
+export const DEFAULT_DISPLAY_MODE: DisplayMode = 'masonry';
 
 // Theme options
 export const DARK_THEMES: ThemeOption[] = [
