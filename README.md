@@ -2,6 +2,8 @@
 
 A macOS desktop app to monitor your Claude Code, Codex, OpenCode AI coding agents in real-time with notifications.
 
+<img width="100%" alt="Gemini_Generated_Image_x2ujf5pxujf5pxujf" src="https://github.com/user-attachments/assets/fc675673-8bd1-4777-8c05-cec0e2025449" />
+
 ## Features vs [original repo](https://github.com/ozankasikci/agent-sessions)
 (huge credit for the idea, I just took it and made it better, keeping the same license)
 
