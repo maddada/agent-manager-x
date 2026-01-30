@@ -1,8 +1,12 @@
 # Agent Manager X
 
-A macOS desktop app to monitor your Claude Code, Codex, OpenCode AI coding agents in real-time with notifications.
+A macOS desktop app to monitor your Claude Code, Codex, OpenCode AI coding agents in real-time with voice or bell notifications.
 
-<img width="2305" height="1896" alt="image" src="https://github.com/user-attachments/assets/c10203c0-ef4b-4221-b3e0-7b4736198ac9" />
+Demo of AMX:
+https://github.com/user-attachments/assets/49c6f091-7b31-4a05-b183-b8f498c4f89b
+
+Full video showing the best agentic workflow I found for managing 10+ agents
+https://youtube.com/watch?v=5LRAKaYJXjw
 
 ## Features vs [original repo](https://github.com/ozankasikci/agent-sessions)
 (huge credit for the idea, I just took it and made it better, keeping the same license)
