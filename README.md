@@ -6,7 +6,7 @@ Shows RAM and CPU usage for every running session and lets you code Stale or Idl
 
 ---
 **Full credit and huge thanks to [@ozankasikci](https://github.com/ozankasikci) for the idea and initial code.**<br />
-**I really liked it and wanted to add so much to it without waiting on approvals hence this fork.**
+**I really liked it and wanted to add so much to it without waiting on approvals hence this fork.**<br />
 **Please star his repo here: https://github.com/ozankasikci/agent-sessions**
 
 ---
