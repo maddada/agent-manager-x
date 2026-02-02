@@ -4,7 +4,7 @@ A macOS desktop app to monitor your Claude Code, Codex, OpenCode AI coding agent
 
 Shows RAM and CPU usage for every running session and lets you code Stale or Idle chats that are wasting memory with 1 click! 
 
-**Notice: Full credit and huge thanks to @ozankasikci for the idea and initial code**
+**Notice: Full credit and huge thanks to [@ozankasikci](https://github.com/ozankasikci) for the idea and initial code**
 **I really liked it and wanted to add so much to it without waiting on approvals hence this fork.**
 **Please star his repo here: https://github.com/ozankasikci/agent-sessions**
 
