@@ -1,7 +1,7 @@
 // Hotkey settings hook
 
 import { useState, useEffect, useCallback } from 'react';
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '@/platform/native';
 import { STORAGE_KEY, DEFAULT_HOTKEY } from '@/lib/settings';
 
 export type UseHotkeyReturn = {

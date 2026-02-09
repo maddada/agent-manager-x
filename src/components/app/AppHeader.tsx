@@ -70,7 +70,7 @@ export function AppHeader({
   return (
     <header
       data-tauri-drag-region
-      className='h-14 flex items-center justify-between px-6 border-b border-border bg-card/50 backdrop-blur-sm'
+      className='electrobun-webkit-app-region-drag h-14 flex items-center justify-between px-6 border-b border-border bg-card/50 backdrop-blur-sm'
     >
       <div data-tauri-drag-region className='flex items-center gap-4 pl-16'>
         <h1 data-tauri-drag-region className='text-lg font-semibold text-foreground'>
@@ -92,7 +92,7 @@ export function AppHeader({
           </div>
         )}
       </div>
-      <div className='flex items-center gap-1'>
+      <div className='electrobun-webkit-app-region-no-drag flex items-center gap-1'>
         {backgroundCount > 0 && (
           <TooltipProvider delayDuration={500}>
             <Tooltip>

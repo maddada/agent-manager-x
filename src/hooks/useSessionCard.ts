@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { invoke } from '@tauri-apps/api/core';
-import { openUrl } from '@tauri-apps/plugin-opener';
+import { invoke } from '@/platform/native';
+import { openUrl } from '@/platform/native';
 import { Session } from '../types/session';
 import {
   type DefaultEditor,

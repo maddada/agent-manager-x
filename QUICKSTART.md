@@ -3,16 +3,15 @@
 ## Prerequisites
 
 - **macOS** (Monterey or later)
-- **Node.js** (v18+)
-- **Rust** (latest stable)
+- **Bun** (latest)
 - **Xcode Command Line Tools**
 
 ```bash
 # Install Xcode CLI tools (if not already installed)
 xcode-select --install
 
-# Install Rust (if not already installed)
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+# Install Bun (if not already installed)
+curl -fsSL https://bun.sh/install | bash
 ```
 
 ## Setup
@@ -22,36 +21,37 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 ```bash
 git clone https://github.com/maddada/agent-manager-x.git
 cd agent-manager-x
-npm install
+bun install
 ```
+
+This project expects Electrobun source to be available at `../electrobun` (sibling folder), matching the scripts in `package.json`.
 
 2. **Run in development mode**
 
 ```bash
-npm run tauri dev
+bun run dev:hmr
 ```
 
-This starts both the Vite dev server (frontend) and the Tauri app (Rust backend).
+This starts the Vite dev server and the Electrobun desktop runtime.
 
 ## Build for Production
 
 ```bash
-npm run tauri build
+bun run build
 ```
 
-The built app will be in `src-tauri/target/release/bundle/`.
+The built app bundle is produced by Electrobun.
 
 ## Available Scripts
 
 | Command | Description |
 |---------|-------------|
-| `npm run tauri dev` | Start development server with hot reload |
-| `npm run tauri build` | Build production app |
-| `npm run build` | Build frontend only |
-| `npm run dev` | Run Vite dev server only (no Tauri) |
-| `npm run test` | Run frontend tests |
-| `npm run test:rust` | Run Rust tests |
-| `npm run test:all` | Run all tests |
+| `bun run dev` | Build frontend and run Electrobun app |
+| `bun run dev:hmr` | Run Electrobun app with Vite HMR server |
+| `bun run build:frontend` | Type-check and build frontend only |
+| `bun run build` | Build frontend + Electrobun app |
+| `bun run build:prod` | Build production channel bundle |
+| `bun run test` | Run frontend tests |
 
 ## Project Structure
 
@@ -62,13 +62,14 @@ agent-manager-x/
 │   ├── hooks/              # React hooks
 │   ├── lib/                # Utilities
 │   └── types/              # TypeScript types
-├── src-tauri/              # Rust backend
-│   └── src/
-│       ├── agent/          # Agent detectors (Claude, Codex, OpenCode)
-│       ├── commands/       # Tauri commands
-│       ├── process/        # Process detection
-│       ├── session/        # Session models
-│       └── terminal/       # Terminal focus utilities
+├── src/bun/                # Electrobun backend/runtime
+│   └── backend/
+│       ├── session*.ts     # Agent session parsing
+│       ├── process*.ts     # Process detection
+│       ├── commands.ts     # Native command handlers
+│       └── notifications.ts
+├── src/platform/           # Frontend native bridge
+├── electrobun.config.ts    # Electrobun build config
 └── package.json
 ```
 
@@ -93,8 +94,8 @@ Once running, the app will:
 - Check that the agent CLI is in your PATH
 
 **Build fails:**
-- Run `rustup update` to ensure Rust is up to date
-- Run `npm install` to ensure all dependencies are installed
+- Run `bun install` to ensure dependencies are installed
+- Ensure Electrobun and Bun are available in your environment
 
 **Terminal focus doesn't work:**
 - Grant accessibility permissions to the app in System Preferences > Privacy & Security > Accessibility

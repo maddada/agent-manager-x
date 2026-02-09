@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import Masonry from 'react-masonry-css';
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '@/platform/native';
 import { Session } from '../types/session';
 import { SessionCard } from './SessionCard';
 import { type DefaultEditor, getCardClickAction, getDefaultTerminal, getCustomEditorCommand, getCustomTerminalCommand } from './Settings';

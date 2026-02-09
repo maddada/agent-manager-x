@@ -1,7 +1,7 @@
 // Voice notification settings hook
 
 import { useState, useEffect } from 'react';
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '@/platform/native';
 
 export type UseNotificationsReturn = {
   notificationInstalled: boolean | null;

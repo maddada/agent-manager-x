@@ -4,17 +4,18 @@
   "version": "0.1.13",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc && vite build",
+    "link:electrobun": "bash ./scripts/link-electrobun.sh",
+    "dev": "bun run build && bash ./scripts/run-electrobun-dev.sh",
+    "dev:hmr": "bash ./scripts/dev-hmr.sh",
+    "hmr": "vite --port 1533",
+    "build:frontend": "bun run link:electrobun && tsc && vite build",
+    "build": "bun run link:electrobun && bun run build:frontend && node ../electrobun/package/bin/electrobun.cjs build",
+    "build:prod": "bun run link:electrobun && bun run build:frontend && node ../electrobun/package/bin/electrobun.cjs build --channel prod",
     "preview": "vite preview",
-    "tauri": "tauri",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:rust": "cd src-tauri && cargo test",
-    "test:all": "npm run test && npm run test:rust",
     "icons:build": "./scripts/build-macos-icons.sh",
-    "icons:inject": "./scripts/inject-assets-car.sh",
-    "tauri:build": "npm run icons:build && npm run tauri build && npm run icons:inject"
+    "icons:inject": "./scripts/inject-assets-car.sh"
   },
   "dependencies": {
     "@radix-ui/react-context-menu": "^2.2.16",
@@ -24,8 +25,6 @@
     "@radix-ui/react-slot": "^1.2.4",
     "@radix-ui/react-tooltip": "^1.2.8",
     "@tailwindcss/vite": "^4.1.17",
-    "@tauri-apps/api": "^2",
-    "@tauri-apps/plugin-opener": "^2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^0.555.0",
@@ -36,7 +35,6 @@
     "tailwind-merge": "^3.4.0"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "^2",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.0",
     "@types/node": "^24.10.1",
