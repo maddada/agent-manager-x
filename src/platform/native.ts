@@ -1,4 +1,4 @@
-// Keep command names aligned with the legacy Tauri invoke surface.
+// Keep command names aligned with the existing frontend invoke surface.
 export type NativeCommand =
   | 'get_all_sessions'
   | 'focus_session'

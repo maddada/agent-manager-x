@@ -7,9 +7,9 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 ASSETS_DIR="$PROJECT_ROOT/assets/icon"
-XCASSETS_DIR="$PROJECT_ROOT/src-tauri/Assets.xcassets"
+XCASSETS_DIR="$PROJECT_ROOT/assets/macos/Assets.xcassets"
 APPICONSET_DIR="$XCASSETS_DIR/AppIcon.appiconset"
-ICONS_DIR="$PROJECT_ROOT/src-tauri/icons"
+ICONS_DIR="$PROJECT_ROOT/assets/icons"
 
 # Source images (1024x1024 with proper macOS padding)
 PADDED_DIR="$ASSETS_DIR/padded"
@@ -79,9 +79,9 @@ for size in "${SIZES[@]}"; do
 done
 
 echo ""
-echo "Generating standard Tauri icons..."
+echo "Generating standard app icons..."
 
-# Generate standard Tauri icon files (using dark appearance as default)
+# Generate standard app icon files (using dark appearance as default)
 sips -z 32 32 "$DARK_SOURCE" --out "$ICONS_DIR/32x32.png" >/dev/null 2>&1
 sips -z 128 128 "$DARK_SOURCE" --out "$ICONS_DIR/128x128.png" >/dev/null 2>&1
 sips -z 256 256 "$DARK_SOURCE" --out "$ICONS_DIR/128x128@2x.png" >/dev/null 2>&1
@@ -131,7 +131,3 @@ echo ""
 echo "Generated files:"
 echo "  - Asset Catalog: $APPICONSET_DIR/"
 echo "  - Standard icons: $ICONS_DIR/"
-echo ""
-echo "To compile the Asset Catalog into your app bundle, run:"
-echo "  ./scripts/inject-assets-car.sh"
-echo ""

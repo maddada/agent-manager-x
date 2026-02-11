@@ -1,6 +1,13 @@
 import { appendFileSync } from 'node:fs';
 import { BrowserView, BrowserWindow, GlobalShortcut, Tray, Utils } from 'electrobun/bun';
-import { bindMainWindow, bindNativeApis, bindTray, commandHandlers } from './backend/commands';
+import {
+  bindMainWindow,
+  bindMainWindowFactory,
+  bindNativeApis,
+  bindTray,
+  clearMainWindow,
+  commandHandlers,
+} from './backend/commands';
 
 type RequestDef<F> = F extends (...args: infer A) => infer R
   ? {
@@ -58,8 +65,8 @@ function getMainViewUrl(): string {
   return 'views://mainview/index.html';
 }
 
-function createMainTray(mainWindow: BrowserWindow): Tray {
-  const appTray = new Tray();
+function createMainTray(getOrCreateMainWindow: () => BrowserWindow): Tray {
+  const appTray = new Tray({ title: '0' });
   appTray.setMenu([
     { type: 'normal', label: 'Show Window', action: 'show' },
     { type: 'separator' },
@@ -76,9 +83,11 @@ function createMainTray(mainWindow: BrowserWindow): Tray {
     }
 
     if (action === '' || action === 'show') {
+      const mainWindow = getOrCreateMainWindow();
       if (mainWindow.isMinimized()) {
         mainWindow.unminimize();
       }
+      mainWindow.show();
       mainWindow.focus();
     }
   });
@@ -99,34 +108,48 @@ try {
   logStartup(`[startup] creating main window with url=${url}`);
   console.log(`[amx] creating main window with url=${url}`);
 
-  const mainWindow = new BrowserWindow({
-    title: MAIN_TITLE,
-    url,
-    frame: {
-      width: 1100,
-      height: 700,
-      x: 160,
-      y: 120,
-    },
-    rpc,
-  });
+  let mainWindow: BrowserWindow | null = null;
 
-  logStartup('[startup] main window created');
-  console.log('[amx] main window created');
+  const getOrCreateMainWindow = (): BrowserWindow => {
+    if (mainWindow) {
+      return mainWindow;
+    }
+
+    mainWindow = new BrowserWindow({
+      title: MAIN_TITLE,
+      url,
+      frame: {
+        width: 1100,
+        height: 700,
+        x: 160,
+        y: 120,
+      },
+      rpc,
+    });
+
+    mainWindow.on('close', () => {
+      clearMainWindow();
+      mainWindow = null;
+    });
+
+    bindMainWindow(mainWindow);
+    logStartup('[startup] main window created');
+    console.log('[amx] main window created');
+    return mainWindow;
+  };
 
   bindNativeApis({ GlobalShortcut, Utils });
-  bindMainWindow(mainWindow);
-  bindTray(createMainTray(mainWindow));
+  bindMainWindowFactory(getOrCreateMainWindow);
+  bindTray(createMainTray(getOrCreateMainWindow));
+  commandHandlers.update_tray_title({ total: 0, waiting: 0 });
 
-  if (mainWindow.isMinimized()) {
-    mainWindow.unminimize();
+  const window = getOrCreateMainWindow();
+
+  if (window.isMinimized()) {
+    window.unminimize();
   }
-  mainWindow.show();
-  mainWindow.focus();
-
-  mainWindow.on('close', () => {
-    Utils.quit();
-  });
+  window.show();
+  window.focus();
 } catch (error) {
   const message = formatError(error);
   logStartup(`[startup] fatal: ${message}`);

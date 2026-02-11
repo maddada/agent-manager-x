@@ -9,13 +9,12 @@
     "dev:hmr": "bash ./scripts/dev-hmr.sh",
     "hmr": "vite --port 1533",
     "build:frontend": "bun run link:electrobun && tsc && vite build",
-    "build": "bun run link:electrobun && bun run build:frontend && node ../electrobun/package/bin/electrobun.cjs build",
-    "build:prod": "bun run link:electrobun && bun run build:frontend && node ../electrobun/package/bin/electrobun.cjs build --channel prod",
+    "build": "bun run link:electrobun && bun run build:frontend && bun ../electrobun/package/bin/electrobun.cjs build",
+    "build:prod": "bun run link:electrobun && bun run build:frontend && bun ../electrobun/package/bin/electrobun.cjs build --channel prod",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "icons:build": "./scripts/build-macos-icons.sh",
-    "icons:inject": "./scripts/inject-assets-car.sh"
+    "icons:build": "./scripts/build-macos-icons.sh"
   },
   "dependencies": {
     "@radix-ui/react-context-menu": "^2.2.16",

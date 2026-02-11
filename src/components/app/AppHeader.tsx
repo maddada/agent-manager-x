@@ -69,21 +69,19 @@ export function AppHeader({
 
   return (
     <header
-      data-tauri-drag-region
       className='electrobun-webkit-app-region-drag h-14 flex items-center justify-between px-6 border-b border-border bg-card/50 backdrop-blur-sm'
     >
-      <div data-tauri-drag-region className='flex items-center gap-4 pl-16'>
-        <h1 data-tauri-drag-region className='text-lg font-semibold text-foreground'>
+      <div className='flex items-center gap-4 pl-16'>
+        <h1 className='text-lg font-semibold text-foreground'>
           Agent Manager X
         </h1>
         {totalCount > 0 && (
-          <div data-tauri-drag-region className='flex items-center gap-2'>
-            <Badge data-tauri-drag-region variant='secondary' className='font-medium pointer-events-none'>
+          <div className='flex items-center gap-2'>
+            <Badge variant='secondary' className='font-medium pointer-events-none'>
               {totalCount} active
             </Badge>
             {waitingCount > 0 && (
               <Badge
-                data-tauri-drag-region
                 className='bg-status-waiting/20 text-status-waiting border-status-waiting/30 font-medium pointer-events-none'
               >
                 {waitingCount} waiting

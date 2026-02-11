@@ -13,6 +13,7 @@ import { getAllSessions } from './sessions';
 
 type WindowController = {
   isMinimized(): boolean;
+  show(): void;
   minimize(): void;
   unminimize(): void;
   focus(): void;
@@ -32,6 +33,7 @@ type UtilsApi = {
 };
 
 let mainWindow: WindowController | null = null;
+let mainWindowFactory: (() => WindowController) | null = null;
 let tray: TrayController | null = null;
 let currentShortcut: string | null = null;
 let globalShortcutApi: GlobalShortcutApi | null = null;
@@ -39,7 +41,19 @@ let utilsApi: UtilsApi | null = null;
 const appBootTimeMs = Date.now();
 
 function toggleMainWindow(): void {
+  let createdWindow = false;
+  if (!mainWindow && mainWindowFactory) {
+    mainWindow = mainWindowFactory();
+    createdWindow = true;
+  }
+
   if (!mainWindow) {
+    return;
+  }
+
+  if (createdWindow) {
+    mainWindow.show();
+    mainWindow.focus();
     return;
   }
 
@@ -63,6 +77,14 @@ function toggleMainWindow(): void {
 
 export function bindMainWindow(window: WindowController): void {
   mainWindow = window;
+}
+
+export function clearMainWindow(): void {
+  mainWindow = null;
+}
+
+export function bindMainWindowFactory(factory: () => WindowController): void {
+  mainWindowFactory = factory;
 }
 
 export function bindTray(nextTray: TrayController): void {
@@ -91,6 +113,14 @@ function parseString(value: unknown, field: string): string {
   return value;
 }
 
+function normalizeShortcut(shortcut: string): string {
+  return shortcut
+    .split('+')
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0)
+    .join('+');
+}
+
 export const commandHandlers = {
   get_all_sessions: () => getAllSessions(),
 
@@ -107,9 +137,7 @@ export const commandHandlers = {
 
     const title = waiting > 0
       ? `${total} (${waiting} idle)`
-      : total > 0
-        ? `${total}`
-        : '';
+      : `${total}`;
 
     tray?.setTitle(title);
     return null;
@@ -120,7 +148,10 @@ export const commandHandlers = {
       throw new Error('Global shortcut API is not initialized');
     }
 
-    const shortcut = parseString(params.shortcut, 'shortcut');
+    const shortcut = normalizeShortcut(parseString(params.shortcut, 'shortcut'));
+    if (!shortcut) {
+      throw new Error('Missing or invalid shortcut');
+    }
 
     if (currentShortcut) {
       globalShortcutApi.unregister(currentShortcut);
@@ -132,7 +163,7 @@ export const commandHandlers = {
     });
 
     if (!ok) {
-      throw new Error('Failed to register shortcut');
+      throw new Error('Failed to register shortcut (it may already be in use)');
     }
 
     currentShortcut = shortcut;
@@ -145,11 +176,8 @@ export const commandHandlers = {
     }
 
     if (currentShortcut) {
-      const ok = globalShortcutApi.unregister(currentShortcut);
+      globalShortcutApi.unregister(currentShortcut);
       currentShortcut = null;
-      if (!ok) {
-        throw new Error('Failed to unregister shortcut');
-      }
     }
     return null;
   },

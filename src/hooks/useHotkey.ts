@@ -17,6 +17,71 @@ export type UseHotkeyReturn = {
   handleClear: () => Promise<void>;
 };
 
+function normalizeShortcut(shortcut: string): string {
+  const raw = shortcut.trim();
+  if (!raw) {
+    return '';
+  }
+
+  const parts = raw
+    .split('+')
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0);
+
+  if (parts.length === 0) {
+    return '';
+  }
+
+  const normalized = parts.map((part) => {
+    const lower = part.toLowerCase();
+    switch (lower) {
+      case 'cmd':
+      case 'command':
+        return 'Command';
+      case 'cmdorctrl':
+      case 'commandorcontrol':
+        return 'CommandOrControl';
+      case 'ctrl':
+      case 'control':
+        return 'Control';
+      case 'alt':
+      case 'option':
+        return 'Option';
+      case 'shift':
+        return 'Shift';
+      case 'meta':
+      case 'super':
+      case 'win':
+        return 'Super';
+      case 'arrowup':
+      case 'up':
+        return 'Up';
+      case 'arrowdown':
+      case 'down':
+        return 'Down';
+      case 'arrowleft':
+      case 'left':
+        return 'Left';
+      case 'arrowright':
+      case 'right':
+        return 'Right';
+      case 'spacebar':
+      case 'space':
+        return 'Space';
+      case 'esc':
+      case 'escape':
+        return 'Escape';
+      case 'return':
+      case 'enter':
+        return 'Enter';
+      default:
+        return part.length === 1 ? part.toUpperCase() : part;
+    }
+  });
+
+  return normalized.join('+');
+}
+
 export function useHotkey(
   setError: (error: string | null) => void
 ): UseHotkeyReturn {
@@ -28,14 +93,25 @@ export function useHotkey(
   // Load saved hotkey on mount
   useEffect(() => {
     const savedHotkey = localStorage.getItem(STORAGE_KEY);
-    if (savedHotkey) {
-      setHotkey(savedHotkey);
+    if (savedHotkey === null) {
+      setHotkey(DEFAULT_HOTKEY);
+      return;
+    }
+
+    const normalized = normalizeShortcut(savedHotkey);
+    setHotkey(normalized);
+    if (normalized !== savedHotkey) {
+      localStorage.setItem(STORAGE_KEY, normalized);
     }
   }, []);
 
   const registerHotkey = useCallback(async (shortcut: string) => {
     try {
-      await invoke('register_shortcut', { shortcut });
+      const normalizedShortcut = normalizeShortcut(shortcut);
+      if (!normalizedShortcut) {
+        throw new Error('Shortcut cannot be empty');
+      }
+      await invoke('register_shortcut', { shortcut: normalizedShortcut });
       setError(null);
       return true;
     } catch (err) {
@@ -45,19 +121,27 @@ export function useHotkey(
   }, [setError]);
 
   const handleSave = async () => {
-    const success = await registerHotkey(hotkey);
+    const pendingRecordedShortcut = normalizeShortcut(recordedKeys.join('+'));
+    const normalizedShortcut = normalizeShortcut(hotkey) || pendingRecordedShortcut;
+    const success = await registerHotkey(normalizedShortcut);
     if (success) {
-      localStorage.setItem(STORAGE_KEY, hotkey);
+      setIsRecording(false);
+      setRecordedKeys([]);
+      setHotkey(normalizedShortcut);
+      localStorage.setItem(STORAGE_KEY, normalizedShortcut);
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     }
   };
 
   const handleClear = async () => {
+    setIsRecording(false);
+    setRecordedKeys([]);
+    setHotkey('');
+    localStorage.setItem(STORAGE_KEY, '');
+
     try {
       await invoke('unregister_shortcut');
-      setHotkey('');
-      localStorage.removeItem(STORAGE_KEY);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -82,8 +166,22 @@ export function useHotkey(
 export function useHotkeyInit() {
   useEffect(() => {
     const savedHotkey = localStorage.getItem(STORAGE_KEY);
-    if (savedHotkey) {
-      invoke('register_shortcut', { shortcut: savedHotkey }).catch(console.error);
+    if (savedHotkey === null) {
+      const initialHotkey = normalizeShortcut(DEFAULT_HOTKEY) || DEFAULT_HOTKEY;
+      localStorage.setItem(STORAGE_KEY, initialHotkey);
+      invoke('register_shortcut', { shortcut: initialHotkey }).catch(console.error);
+      return;
     }
+
+    const startupHotkey = normalizeShortcut(savedHotkey);
+    if (startupHotkey !== savedHotkey) {
+      localStorage.setItem(STORAGE_KEY, startupHotkey);
+    }
+
+    if (!startupHotkey) {
+      return;
+    }
+
+    invoke('register_shortcut', { shortcut: startupHotkey }).catch(console.error);
   }, []);
 }

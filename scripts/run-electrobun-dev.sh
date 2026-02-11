@@ -5,7 +5,7 @@ ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT_DIR"
 
 if [[ "$(uname -s)" != "Darwin" ]]; then
-  node ../electrobun/package/bin/electrobun.cjs dev
+  bun ../electrobun/package/bin/electrobun.cjs dev
   exit 0
 fi
 
