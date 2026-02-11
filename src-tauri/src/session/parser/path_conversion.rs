@@ -50,7 +50,9 @@ pub fn convert_dir_name_to_path(dir_name: &str) -> String {
     }
 
     // Find "Projects" or "UnityProjects" index - everything after that is the project name
-    let projects_idx = parts.iter().position(|&p| p == "Projects" || p == "UnityProjects");
+    let projects_idx = parts
+        .iter()
+        .position(|&p| p == "Projects" || p == "UnityProjects");
 
     if let Some(idx) = projects_idx {
         // Path components are before and including "Projects"

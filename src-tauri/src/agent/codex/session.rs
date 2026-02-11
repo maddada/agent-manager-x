@@ -2,11 +2,13 @@
 
 use crate::agent::AgentProcess;
 use crate::session::{AgentType, Session, SessionStatus};
+use once_cell::sync::Lazy;
 use serde_json::Value;
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 use std::time::SystemTime;
 
 #[derive(Debug, Clone)]
@@ -20,28 +22,47 @@ struct CodexSessionFile {
     last_activity_at: Option<String>,
 }
 
+#[derive(Debug, Clone)]
+struct CodexSessionCandidate {
+    path: PathBuf,
+    modified: SystemTime,
+}
+
+#[derive(Debug, Clone)]
+struct CachedCodexSessionFile {
+    modified: SystemTime,
+    parsed: Option<CodexSessionFile>,
+}
+
+static PARSED_CODEX_SESSION_CACHE: Lazy<Mutex<HashMap<PathBuf, CachedCodexSessionFile>>> =
+    Lazy::new(|| Mutex::new(HashMap::new()));
+
 /// Get Codex sessions from conversation files.
 pub fn get_codex_sessions(processes: &[AgentProcess]) -> Vec<Session> {
     let mut sessions = Vec::new();
-
-    // Codex stores sessions in ~/.codex/sessions/
-    let codex_dir = match dirs::home_dir() {
-        Some(home) => home.join(".codex").join("sessions"),
-        None => return sessions,
-    };
-
-    if !codex_dir.exists() {
-        log::debug!("Codex sessions directory does not exist: {:?}", codex_dir);
+    if processes.is_empty() {
+        log::debug!("No Codex processes found, skipping Codex session scan");
         return sessions;
     }
 
-    let session_files = collect_codex_session_files(&codex_dir);
+    let codex_dirs = get_codex_sessions_dirs();
+    log::debug!("Codex session directories to scan: {:?}", codex_dirs);
+    if codex_dirs.is_empty() {
+        log::warn!("No home directory found, skipping Codex session scan");
+        return sessions;
+    }
+
+    let parse_limit = codex_session_parse_limit(processes.len());
+    let session_files = collect_codex_session_files(&codex_dirs, parse_limit);
 
     // Build lookup: cwd -> session files (newest first)
     let mut files_by_cwd: HashMap<String, VecDeque<usize>> = HashMap::new();
     for (index, file) in session_files.iter().enumerate() {
         if let Some(cwd) = &file.cwd {
-            files_by_cwd.entry(cwd.clone()).or_default().push_back(index);
+            files_by_cwd
+                .entry(cwd.clone())
+                .or_default()
+                .push_back(index);
         }
     }
     for queue in files_by_cwd.values_mut() {
@@ -129,37 +150,171 @@ pub fn get_codex_sessions(processes: &[AgentProcess]) -> Vec<Session> {
     sessions
 }
 
-fn collect_codex_session_files(codex_dir: &Path) -> Vec<CodexSessionFile> {
-    let mut files = Vec::new();
+fn codex_session_parse_limit(process_count: usize) -> usize {
+    const FILES_PER_PROCESS: usize = 2;
+    const MAX_PARSE_FILES: usize = 120;
+    let min_parse_files = process_count.max(2);
 
-    fn search_recursive(dir: &Path, files: &mut Vec<CodexSessionFile>) {
-        if let Ok(entries) = std::fs::read_dir(dir) {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if path.is_dir() {
-                    search_recursive(&path, files);
-                } else if path.extension().map(|e| e == "jsonl").unwrap_or(false) {
-                    if let Ok(metadata) = path.metadata() {
-                        if let Ok(modified) = metadata.modified() {
-                            if let Some(parsed) = parse_codex_session_file(&path, modified) {
-                                files.push(parsed);
-                            }
-                        }
+    process_count
+        .saturating_mul(FILES_PER_PROCESS)
+        .clamp(min_parse_files, MAX_PARSE_FILES)
+}
+
+fn collect_codex_session_files(codex_dirs: &[PathBuf], parse_limit: usize) -> Vec<CodexSessionFile> {
+    let mut candidates = Vec::new();
+    let mut seen_paths: HashSet<PathBuf> = HashSet::new();
+    let max_candidates = parse_limit.saturating_mul(3).max(parse_limit);
+    let per_root_limit = if codex_dirs.is_empty() {
+        max_candidates
+    } else {
+        max_candidates.div_ceil(codex_dirs.len())
+    };
+
+    fn search_recursive(
+        dir: &Path,
+        candidates: &mut Vec<CodexSessionCandidate>,
+        seen_paths: &mut HashSet<PathBuf>,
+        max_candidates: usize,
+    ) -> bool {
+        if candidates.len() >= max_candidates {
+            return true;
+        }
+
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            return false;
+        };
+
+        // Codex session dirs are date-based; descending lexical order prioritizes newest paths.
+        let mut entries: Vec<_> = entries.flatten().collect();
+        entries.sort_by(|a, b| b.file_name().cmp(&a.file_name()));
+
+        for entry in entries {
+            if candidates.len() >= max_candidates {
+                return true;
+            }
+
+            let path = entry.path();
+            if path.is_dir() {
+                if search_recursive(&path, candidates, seen_paths, max_candidates) {
+                    return true;
+                }
+            } else if path.extension().map(|e| e == "jsonl").unwrap_or(false) {
+                if !seen_paths.insert(path.clone()) {
+                    continue;
+                }
+                if let Ok(metadata) = path.metadata() {
+                    if let Ok(modified) = metadata.modified() {
+                        candidates.push(CodexSessionCandidate { path, modified });
                     }
                 }
             }
         }
+
+        false
     }
 
-    search_recursive(codex_dir, &mut files);
+    for codex_dir in codex_dirs {
+        if !codex_dir.exists() {
+            log::debug!(
+                "Codex sessions directory does not exist, skipping: {:?}",
+                codex_dir
+            );
+            continue;
+        }
+        search_recursive(codex_dir, &mut candidates, &mut seen_paths, per_root_limit);
+    }
+
+    candidates.sort_by(|a, b| b.modified.cmp(&a.modified));
+    let parse_count = parse_limit.min(candidates.len());
+    log::debug!(
+        "Codex session candidates collected: {}, parsing newest {}",
+        candidates.len(),
+        parse_count
+    );
+
+    let mut files = Vec::new();
+    for candidate in candidates.into_iter().take(parse_count) {
+        if let Some(parsed) = get_cached_codex_session_file(&candidate.path, candidate.modified) {
+            files.push(parsed);
+        }
+    }
+
     files
+}
+
+fn get_cached_codex_session_file(path: &Path, modified: SystemTime) -> Option<CodexSessionFile> {
+    {
+        let cache = PARSED_CODEX_SESSION_CACHE
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        if let Some(entry) = cache.get(path) {
+            if entry.modified == modified {
+                return entry.parsed.clone();
+            }
+        }
+    }
+
+    let parsed = parse_codex_session_file(path, modified);
+
+    let mut cache = PARSED_CODEX_SESSION_CACHE
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
+    cache.insert(
+        path.to_path_buf(),
+        CachedCodexSessionFile {
+            modified,
+            parsed: parsed.clone(),
+        },
+    );
+
+    parsed
+}
+
+fn get_codex_sessions_dirs() -> Vec<PathBuf> {
+    let Some(home) = dirs::home_dir() else {
+        return Vec::new();
+    };
+
+    // Keep the legacy default location first, then profile-specific locations.
+    let mut dirs = vec![home.join(".codex").join("sessions")];
+
+    for profile_root in [
+        home.join(".codex-profiles").join("work"),
+        home.join(".codex-profiles").join("personal"),
+    ] {
+        dirs.push(resolve_profile_sessions_dir(profile_root));
+    }
+
+    dedupe_paths(dirs)
+}
+
+fn resolve_profile_sessions_dir(profile_root: PathBuf) -> PathBuf {
+    let sessions_dir = profile_root.join("sessions");
+    if sessions_dir.exists() {
+        sessions_dir
+    } else {
+        profile_root
+    }
+}
+
+fn dedupe_paths(paths: Vec<PathBuf>) -> Vec<PathBuf> {
+    let mut seen = HashSet::new();
+    paths
+        .into_iter()
+        .filter(|path| seen.insert(path.clone()))
+        .collect()
 }
 
 fn build_session_from_file(file: &CodexSessionFile, process: &AgentProcess) -> Option<Session> {
     let project_path = file
         .cwd
         .clone()
-        .or_else(|| process.cwd.as_ref().map(|p| p.to_string_lossy().to_string()))
+        .or_else(|| {
+            process
+                .cwd
+                .as_ref()
+                .map(|p| p.to_string_lossy().to_string())
+        })
         .unwrap_or_else(|| "/".to_string());
     let project_name = Path::new(&project_path)
         .file_name()
@@ -442,7 +597,11 @@ fn system_time_to_rfc3339(time: SystemTime) -> String {
 }
 
 /// Determine session status based on CPU usage, last role, and time since last modification.
-fn determine_status(cpu_usage: f32, last_role: Option<&str>, modified: std::time::SystemTime) -> SessionStatus {
+fn determine_status(
+    cpu_usage: f32,
+    last_role: Option<&str>,
+    modified: std::time::SystemTime,
+) -> SessionStatus {
     const IDLE_THRESHOLD_SECS: u64 = 5 * 60;
     const STALE_THRESHOLD_SECS: u64 = 10 * 60;
 

@@ -1,5 +1,5 @@
 // Tests for stale message handling in determine_status
-use crate::session::{SessionStatus, determine_status};
+use crate::session::{determine_status, SessionStatus};
 
 #[test]
 fn test_determine_status_stale_assistant_message() {
@@ -9,15 +9,18 @@ fn test_determine_status_stale_assistant_message() {
     // Stale assistant message -> Waiting
     let status = determine_status(
         Some("assistant"),
-        true,  // has_tool_use (normally would be Processing)
+        true, // has_tool_use (normally would be Processing)
         false,
         false,
         false,
         false, // file_recently_modified
         true,  // message_is_stale - this overrides!
     );
-    assert!(matches!(status, SessionStatus::Waiting),
-        "Stale assistant message should be Waiting, got {:?}", status);
+    assert!(
+        matches!(status, SessionStatus::Waiting),
+        "Stale assistant message should be Waiting, got {:?}",
+        status
+    );
 }
 
 #[test]
@@ -32,24 +35,25 @@ fn test_determine_status_stale_user_message() {
         false, // file_recently_modified
         true,  // message_is_stale - this overrides!
     );
-    assert!(matches!(status, SessionStatus::Waiting),
-        "Stale user message should be Waiting, got {:?}", status);
+    assert!(
+        matches!(status, SessionStatus::Waiting),
+        "Stale user message should be Waiting, got {:?}",
+        status
+    );
 }
 
 #[test]
 fn test_determine_status_stale_unknown_type() {
     // Stale unknown type -> Idle
     let status = determine_status(
-        None,
-        false,
-        false,
-        false,
-        false,
-        false, // file_recently_modified
+        None, false, false, false, false, false, // file_recently_modified
         true,  // message_is_stale
     );
-    assert!(matches!(status, SessionStatus::Idle),
-        "Stale unknown message should be Idle, got {:?}", status);
+    assert!(
+        matches!(status, SessionStatus::Idle),
+        "Stale unknown message should be Idle, got {:?}",
+        status
+    );
 }
 
 #[test]
@@ -62,9 +66,12 @@ fn test_determine_status_stale_with_recent_file() {
         false,
         false,
         false,
-        true,  // file_recently_modified - takes precedence!
-        true,  // message_is_stale
+        true, // file_recently_modified - takes precedence!
+        true, // message_is_stale
     );
-    assert!(matches!(status, SessionStatus::Thinking),
-        "Recent file activity should override staleness, got {:?}", status);
+    assert!(
+        matches!(status, SessionStatus::Thinking),
+        "Recent file activity should override staleness, got {:?}",
+        status
+    );
 }

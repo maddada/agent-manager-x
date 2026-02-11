@@ -37,8 +37,8 @@ pub enum SessionStatus {
     Waiting,
     Processing,
     Thinking,
-    Idle,   // Waiting for 5+ minutes
-    Stale,  // Waiting for 10+ minutes
+    Idle,  // Waiting for 5+ minutes
+    Stale, // Waiting for 10+ minutes
 }
 
 /// Response containing all sessions and counts

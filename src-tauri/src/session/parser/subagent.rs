@@ -59,6 +59,10 @@ pub fn count_active_subagents(project_dir: &PathBuf, parent_session_id: &str) ->
         })
         .count();
 
-    trace!("Found {} active subagents for session {}", count, parent_session_id);
+    trace!(
+        "Found {} active subagents for session {}",
+        count,
+        parent_session_id
+    );
     count
 }

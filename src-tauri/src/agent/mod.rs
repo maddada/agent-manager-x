@@ -2,7 +2,7 @@ pub mod claude;
 pub mod codex;
 pub mod opencode;
 
-use crate::session::{Session, SessionsResponse, AgentType};
+use crate::session::{AgentType, Session, SessionsResponse};
 
 /// Common process info shared across agent types
 #[derive(Debug, Clone)]
@@ -43,8 +43,12 @@ pub fn get_all_sessions() -> SessionsResponse {
     for detector in &detectors {
         let processes = detector.find_processes();
         let sessions = detector.find_sessions(&processes);
-        log::info!("{}: found {} processes, {} sessions",
-            detector.name(), processes.len(), sessions.len());
+        log::info!(
+            "{}: found {} processes, {} sessions",
+            detector.name(),
+            processes.len(),
+            sessions.len()
+        );
         all_sessions.extend(sessions);
     }
 
@@ -87,7 +91,8 @@ pub fn get_all_sessions() -> SessionsResponse {
         }
     });
 
-    let waiting_count = foreground_sessions.iter()
+    let waiting_count = foreground_sessions
+        .iter()
         .filter(|s| matches!(s.status, crate::session::SessionStatus::Waiting))
         .count();
     let total_count = foreground_sessions.len();

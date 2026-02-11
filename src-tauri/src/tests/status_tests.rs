@@ -1,5 +1,5 @@
 // Tests for the determine_status function
-use crate::session::{SessionStatus, determine_status};
+use crate::session::{determine_status, SessionStatus};
 
 #[test]
 fn test_determine_status_assistant_with_tool_use() {
@@ -108,7 +108,7 @@ fn test_determine_status_user_interrupted() {
         false,
         false,
         false,
-        true,  // is_interrupted
+        true, // is_interrupted
         false,
         false, // message_is_stale
     );
@@ -121,7 +121,7 @@ fn test_determine_status_user_with_tool_result() {
     let status = determine_status(
         Some("user"),
         false,
-        true,  // has_tool_result
+        true, // has_tool_result
         false,
         false, // is_interrupted
         true,  // file_recently_modified
@@ -133,7 +133,7 @@ fn test_determine_status_user_with_tool_result() {
     let status = determine_status(
         Some("user"),
         false,
-        true,  // has_tool_result
+        true, // has_tool_result
         false,
         false, // is_interrupted
         false, // not recently modified - stuck
@@ -146,11 +146,7 @@ fn test_determine_status_user_with_tool_result() {
 fn test_determine_status_unknown_type() {
     // Unknown message type with recent file activity -> Thinking
     let status = determine_status(
-        None,
-        false,
-        false,
-        false,
-        false, // is_interrupted
+        None, false, false, false, false, // is_interrupted
         true,  // file_recently_modified
         false, // message_is_stale
     );
@@ -158,13 +154,8 @@ fn test_determine_status_unknown_type() {
 
     // Unknown message type without recent activity -> Idle
     let status = determine_status(
-        None,
-        false,
-        false,
-        false,
-        false, // is_interrupted
-        false,
-        false, // message_is_stale
+        None, false, false, false, false, // is_interrupted
+        false, false, // message_is_stale
     );
     assert!(matches!(status, SessionStatus::Idle));
 }

@@ -34,9 +34,9 @@ fn extract_text_content(content: &serde_json::Value) -> &str {
         serde_json::Value::String(s) => s.as_str(),
         serde_json::Value::Array(arr) => {
             // Find first text block
-            arr.iter().find_map(|v| {
-                v.get("text").and_then(|t| t.as_str())
-            }).unwrap_or("")
+            arr.iter()
+                .find_map(|v| v.get("text").and_then(|t| t.as_str()))
+                .unwrap_or("")
         }
         _ => "",
     }
@@ -76,20 +76,20 @@ pub fn is_local_slash_command(content: &serde_json::Value) -> bool {
         "/vim",
     ];
 
-    local_commands.iter().any(|cmd| {
-        trimmed == *cmd || trimmed.starts_with(&format!("{} ", cmd))
-    })
+    local_commands
+        .iter()
+        .any(|cmd| trimmed == *cmd || trimmed.starts_with(&format!("{} ", cmd)))
 }
 
 /// Returns sort priority for status (lower = higher priority in list)
 /// Active sessions (thinking/processing) appear first, then waiting, then idle
 pub fn status_sort_priority(status: &SessionStatus) -> u8 {
     match status {
-        SessionStatus::Thinking => 0,   // Active - Claude is working - show first
+        SessionStatus::Thinking => 0, // Active - Claude is working - show first
         SessionStatus::Processing => 0, // Active - tool is running - show first
-        SessionStatus::Waiting => 1,    // Needs attention - show second
-        SessionStatus::Idle => 2,       // Inactive 5+ min - show third
-        SessionStatus::Stale => 3,      // Inactive 10+ min - show last
+        SessionStatus::Waiting => 1,  // Needs attention - show second
+        SessionStatus::Idle => 2,     // Inactive 5+ min - show third
+        SessionStatus::Stale => 3,    // Inactive 10+ min - show last
     }
 }
 

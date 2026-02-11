@@ -44,7 +44,8 @@ pub fn parse_session_file(
     // Calculate message staleness from timestamp
     // Messages older than 30 seconds are considered stale
     const STALENESS_THRESHOLD_SECS: i64 = 30;
-    let message_is_stale = data.last_timestamp
+    let message_is_stale = data
+        .last_timestamp
         .as_ref()
         .and_then(|ts| chrono::DateTime::parse_from_rfc3339(ts).ok())
         .map(|dt| {
@@ -68,11 +69,12 @@ pub fn parse_session_file(
 
     // Time-based status upgrades for inactive sessions
     // Waiting for 5+ minutes -> Idle, 10+ minutes -> Stale
-    const IDLE_THRESHOLD_SECS: i64 = 5 * 60;   // 5 minutes
+    const IDLE_THRESHOLD_SECS: i64 = 5 * 60; // 5 minutes
     const STALE_THRESHOLD_SECS: i64 = 10 * 60; // 10 minutes
 
     if matches!(status, SessionStatus::Waiting | SessionStatus::Idle) {
-        if let Some(age_secs) = data.last_timestamp
+        if let Some(age_secs) = data
+            .last_timestamp
             .as_ref()
             .and_then(|ts| chrono::DateTime::parse_from_rfc3339(ts).ok())
             .map(|dt| {
@@ -152,7 +154,9 @@ fn should_show_last_user_message(status: &SessionStatus, last_message: &Option<S
         None => true,
         Some(message) => {
             let trimmed = message.trim();
-            trimmed.is_empty() || trimmed.eq_ignore_ascii_case("(no content)") || trimmed.eq_ignore_ascii_case("no content")
+            trimmed.is_empty()
+                || trimmed.eq_ignore_ascii_case("(no content)")
+                || trimmed.eq_ignore_ascii_case("no content")
         }
     }
 }

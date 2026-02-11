@@ -3,7 +3,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { Session, SessionsResponse, AgentType } from '../types/session';
 import { mergeWithStableOrder } from '../lib/sessionOrdering';
 
-const POLL_INTERVAL = 2000; // 2 seconds
+const POLL_INTERVAL = 3000; // 3 seconds
 
 export type AgentCounts = Record<AgentType, number>;
 

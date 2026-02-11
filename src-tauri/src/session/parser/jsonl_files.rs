@@ -21,10 +21,7 @@ pub fn get_recently_active_jsonl_files(project_dir: &PathBuf) -> Vec<PathBuf> {
         .flatten()
         .filter(|e| {
             let path = e.path();
-            path.extension()
-                .map(|ext| ext == "jsonl")
-                .unwrap_or(false)
-                && !is_subagent_file(&path)
+            path.extension().map(|ext| ext == "jsonl").unwrap_or(false) && !is_subagent_file(&path)
         })
         .filter_map(|e| {
             let path = e.path();
@@ -36,10 +33,7 @@ pub fn get_recently_active_jsonl_files(project_dir: &PathBuf) -> Vec<PathBuf> {
     // Sort by modification time (newest first)
     jsonl_files.sort_by(|a, b| b.1.cmp(&a.1));
 
-    jsonl_files
-        .into_iter()
-        .map(|(path, _)| path)
-        .collect()
+    jsonl_files.into_iter().map(|(path, _)| path).collect()
 }
 
 /// Find a session for a specific process from available JSONL files
@@ -56,7 +50,14 @@ pub fn find_session_for_process(
     let primary_jsonl = jsonl_files.get(index)?;
 
     // Parse the primary file first
-    let mut session = parse_session_file(primary_jsonl, project_path, process.pid, process.cpu_usage, process.memory_bytes, agent_type.clone())?;
+    let mut session = parse_session_file(
+        primary_jsonl,
+        project_path,
+        process.pid,
+        process.cpu_usage,
+        process.memory_bytes,
+        agent_type.clone(),
+    )?;
 
     // Count active subagents for this session
     session.active_subagent_count = count_active_subagents(project_dir, &session.id);
@@ -85,13 +86,21 @@ pub fn find_session_for_process(
         }
 
         // Parse this file and check its status
-        if let Some(other_session) = parse_session_file(jsonl_path, project_path, process.pid, process.cpu_usage, process.memory_bytes, agent_type.clone()) {
+        if let Some(other_session) = parse_session_file(
+            jsonl_path,
+            project_path,
+            process.pid,
+            process.cpu_usage,
+            process.memory_bytes,
+            agent_type.clone(),
+        ) {
             // CRITICAL: Only consider files from the SAME session
             // Without this check, one session's active status can contaminate another
             if other_session.id != session.id {
                 trace!(
                     "Skipping status from different session: {} (current) vs {} (other)",
-                    session.id, other_session.id
+                    session.id,
+                    other_session.id
                 );
                 continue;
             }

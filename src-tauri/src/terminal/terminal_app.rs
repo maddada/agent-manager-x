@@ -20,7 +20,8 @@ pub fn focus_terminal_app_by_tty(tty: &str) -> Result<(), String> {
         return Err("Terminal is not running".to_string());
     }
 
-    let script = format!(r#"
+    let script = format!(
+        r#"
         tell application "Terminal"
             activate
             repeat with w in windows
@@ -36,7 +37,9 @@ pub fn focus_terminal_app_by_tty(tty: &str) -> Result<(), String> {
             end repeat
         end tell
         return "not found"
-    "#, tty);
+    "#,
+        tty
+    );
 
     execute_applescript(&script)
 }

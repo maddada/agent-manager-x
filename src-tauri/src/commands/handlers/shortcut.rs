@@ -11,7 +11,11 @@ static CURRENT_SHORTCUT: Mutex<Option<Shortcut>> = Mutex::new(None);
 #[tauri::command]
 pub fn register_shortcut(app: tauri::AppHandle, shortcut: String) -> Result<(), String> {
     // Unregister any existing shortcut first
-    if let Some(old_shortcut) = CURRENT_SHORTCUT.lock().unwrap_or_else(|e| e.into_inner()).take() {
+    if let Some(old_shortcut) = CURRENT_SHORTCUT
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .take()
+    {
         let _ = app.global_shortcut().unregister(old_shortcut);
     }
 
@@ -53,7 +57,11 @@ pub fn register_shortcut(app: tauri::AppHandle, shortcut: String) -> Result<(), 
 /// Unregister the current global keyboard shortcut
 #[tauri::command]
 pub fn unregister_shortcut(app: tauri::AppHandle) -> Result<(), String> {
-    if let Some(shortcut) = CURRENT_SHORTCUT.lock().unwrap_or_else(|e| e.into_inner()).take() {
+    if let Some(shortcut) = CURRENT_SHORTCUT
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .take()
+    {
         app.global_shortcut()
             .unregister(shortcut)
             .map_err(|e| format!("Failed to unregister shortcut: {}", e))?;

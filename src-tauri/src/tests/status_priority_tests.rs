@@ -1,5 +1,5 @@
 // Tests for status sorting priority and serialization
-use crate::session::{SessionStatus, status_sort_priority};
+use crate::session::{status_sort_priority, SessionStatus};
 
 #[test]
 fn test_status_sort_priority() {
@@ -17,9 +17,16 @@ fn test_status_sort_priority() {
     assert_eq!(status_sort_priority(&SessionStatus::Stale), 3);
 
     // Verify ordering: Thinking/Processing < Waiting < Idle < Stale
-    assert!(status_sort_priority(&SessionStatus::Thinking) < status_sort_priority(&SessionStatus::Waiting));
-    assert!(status_sort_priority(&SessionStatus::Waiting) < status_sort_priority(&SessionStatus::Idle));
-    assert!(status_sort_priority(&SessionStatus::Idle) < status_sort_priority(&SessionStatus::Stale));
+    assert!(
+        status_sort_priority(&SessionStatus::Thinking)
+            < status_sort_priority(&SessionStatus::Waiting)
+    );
+    assert!(
+        status_sort_priority(&SessionStatus::Waiting) < status_sort_priority(&SessionStatus::Idle)
+    );
+    assert!(
+        status_sort_priority(&SessionStatus::Idle) < status_sort_priority(&SessionStatus::Stale)
+    );
 }
 
 #[test]

@@ -9,7 +9,10 @@ fn get_descendant_pids(pid: u32) -> Vec<u32> {
     let mut descendants = Vec::new();
 
     // Get direct children using pgrep -P
-    if let Ok(output) = Command::new("pgrep").args(["-P", &pid.to_string()]).output() {
+    if let Ok(output) = Command::new("pgrep")
+        .args(["-P", &pid.to_string()])
+        .output()
+    {
         if output.status.success() {
             let stdout = String::from_utf8_lossy(&output.stdout);
             for line in stdout.lines() {
@@ -36,9 +39,7 @@ fn is_process_running(pid: u32) -> bool {
 
 /// Kill a single process with SIGKILL
 fn kill_pid(pid: u32) {
-    let _ = Command::new("kill")
-        .args(["-9", &pid.to_string()])
-        .output();
+    let _ = Command::new("kill").args(["-9", &pid.to_string()]).output();
 }
 
 /// Kill an agent process and all its descendants by PID
@@ -76,7 +77,10 @@ pub fn kill_session(pid: u32) -> Result<(), String> {
         // Final check
         thread::sleep(Duration::from_millis(50));
         if is_process_running(pid) {
-            return Err(format!("Process {} still running after multiple kill attempts", pid));
+            return Err(format!(
+                "Process {} still running after multiple kill attempts",
+                pid
+            ));
         }
     }
 

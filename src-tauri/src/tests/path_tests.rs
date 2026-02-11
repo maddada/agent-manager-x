@@ -53,7 +53,9 @@ fn test_convert_path_to_dir_name() {
 
     // Path with hidden folder (.rsworktree)
     assert_eq!(
-        convert_path_to_dir_name("/Users/ozan/Projects/unity-build-service/.rsworktree/improve-prov-prof-creation"),
+        convert_path_to_dir_name(
+            "/Users/ozan/Projects/unity-build-service/.rsworktree/improve-prov-prof-creation"
+        ),
         "-Users-ozan-Projects-unity-build-service--rsworktree-improve-prov-prof-creation"
     );
 

@@ -1,5 +1,5 @@
 use std::io::Write;
-use std::time::{SystemTime, Duration};
+use std::time::{Duration, SystemTime};
 use tempfile::NamedTempFile;
 
 /// Create a test JSONL file with the given lines

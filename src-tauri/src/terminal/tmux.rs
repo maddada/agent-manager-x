@@ -1,14 +1,19 @@
-use std::process::Command;
 use super::applescript::execute_applescript;
 use super::iterm;
 use super::terminal_app;
+use std::process::Command;
 
 /// Focus a tmux pane by matching its TTY
 /// Returns Ok if the pane was found and focused, Err otherwise
 pub fn focus_tmux_pane_by_tty(tty: &str) -> Result<(), String> {
     // Check if tmux is running by listing panes
     let output = Command::new("tmux")
-        .args(["list-panes", "-a", "-F", "#{pane_tty} #{session_name}:#{window_index}.#{pane_index}"])
+        .args([
+            "list-panes",
+            "-a",
+            "-F",
+            "#{pane_tty} #{session_name}:#{window_index}.#{pane_index}",
+        ])
         .output()
         .map_err(|e| format!("Failed to run tmux: {}", e))?;
 

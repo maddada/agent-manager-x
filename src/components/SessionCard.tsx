@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react';
 import { Session } from '../types/session';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -15,6 +16,12 @@ export type SessionCardProps = {
 };
 
 export function SessionCard({ session, defaultEditor, onKill }: SessionCardProps) {
+  const [showPid, setShowPid] = useState(true);
+  const footerRef = useRef<HTMLDivElement>(null);
+  const statusMetaRef = useRef<HTMLDivElement>(null);
+  const metricsRef = useRef<HTMLDivElement>(null);
+  const pidMeasureRef = useRef<HTMLSpanElement>(null);
+
   const {
     isKilling,
     customName,
@@ -50,6 +57,63 @@ export function SessionCard({ session, defaultEditor, onKill }: SessionCardProps
   const hasMessage = !!session.lastMessage && session.lastMessage.trim().length > 0;
   const fallbackMessage =
     session.status === 'idle' || session.status === 'stale' ? 'No recent messages' : config.label;
+
+  useEffect(() => {
+    const GAP_PX = 8; // gap-2 between metric tokens
+    const REQUIRED_SECTION_GAP_PX = 14;
+    const RESTORE_SECTION_GAP_PX = 28;
+
+    const updatePidVisibility = () => {
+      const footerEl = footerRef.current;
+      const statusEl = statusMetaRef.current;
+      const metricsEl = metricsRef.current;
+      const pidMeasureEl = pidMeasureRef.current;
+
+      if (!footerEl || !statusEl || !metricsEl || !pidMeasureEl) {
+        return;
+      }
+
+      const footerWidth = footerEl.clientWidth;
+      const statusWidth = statusEl.offsetWidth;
+      const metricsWidth = metricsEl.scrollWidth;
+      const pidWidth = pidMeasureEl.offsetWidth;
+
+      if (showPid) {
+        const currentGapPx = footerWidth - statusWidth - metricsWidth;
+        if (currentGapPx <= REQUIRED_SECTION_GAP_PX) {
+          setShowPid(false);
+        }
+        return;
+      }
+
+      const projectedGapPx = footerWidth - statusWidth - (metricsWidth + pidWidth + GAP_PX);
+      if (projectedGapPx >= RESTORE_SECTION_GAP_PX) {
+        setShowPid(true);
+      }
+    };
+
+    updatePidVisibility();
+
+    const footerEl = footerRef.current;
+    if (!footerEl) {
+      return;
+    }
+
+    const resizeObserver = new ResizeObserver(updatePidVisibility);
+    resizeObserver.observe(footerEl);
+
+    return () => {
+      resizeObserver.disconnect();
+    };
+  }, [
+    showPid,
+    session.pid,
+    session.cpuUsage,
+    session.memoryBytes,
+    session.lastActivityAt,
+    session.activeSubagentCount,
+    config.label,
+  ]);
 
   return (
     <>
@@ -140,21 +204,28 @@ export function SessionCard({ session, defaultEditor, onKill }: SessionCardProps
             </div>
 
             {/* Footer: Status Badge + Time */}
-            <div className='flex items-center justify-between pt-3 mt-3 border-t border-border'>
-              <div className='flex items-center gap-2'>
+            <div ref={footerRef} className='flex items-center justify-between gap-3 pt-3 mt-3 border-t border-border'>
+              <div ref={statusMetaRef} className='flex items-center gap-2 min-w-0'>
                 <Badge variant='outline' className={config.badgeClassName}>
                   {config.label}
                 </Badge>
                 {session.activeSubagentCount > 0 && (
-                  <span className='text-xs text-muted-foreground'>[+{session.activeSubagentCount}]</span>
+                  <span className='text-xs text-muted-foreground shrink-0'>[+{session.activeSubagentCount}]</span>
                 )}
               </div>
-              <div className='flex items-center gap-2 text-xs'>
-                <span className='text-muted-foreground'>PID {session.pid}</span>
-                <span className='text-muted-foreground'>{session.cpuUsage.toFixed(0)}%</span>
-                <span className='text-muted-foreground'>{formatMemory(session.memoryBytes)}</span>
-                <span className='text-foreground'>{formatTimeAgo(session.lastActivityAt)}</span>
+              <div ref={metricsRef} className='flex items-center gap-2 text-xs shrink-0 whitespace-nowrap'>
+                {showPid && <span className='text-muted-foreground'>PID {session.pid}</span>}
+                <span className='text-muted-foreground shrink-0'>{session.cpuUsage.toFixed(0)}%</span>
+                <span className='text-muted-foreground shrink-0'>{formatMemory(session.memoryBytes)}</span>
+                <span className='text-foreground shrink-0'>{formatTimeAgo(session.lastActivityAt)}</span>
               </div>
+              <span
+                ref={pidMeasureRef}
+                aria-hidden='true'
+                className='fixed -left-[9999px] top-0 pointer-events-none opacity-0 text-xs whitespace-nowrap'
+              >
+                PID {session.pid}
+              </span>
             </div>
           </CardContent>
         </Card>

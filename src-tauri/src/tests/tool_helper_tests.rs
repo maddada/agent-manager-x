@@ -1,4 +1,6 @@
-use crate::session::{has_tool_use, has_tool_result, is_local_slash_command, is_interrupted_request};
+use crate::session::{
+    has_tool_result, has_tool_use, is_interrupted_request, is_local_slash_command,
+};
 use serde_json::json;
 
 #[test]
@@ -114,8 +116,12 @@ fn test_is_local_slash_command() {
 #[test]
 fn test_is_interrupted_request() {
     // Message with interruption text
-    assert!(is_interrupted_request(&json!("[Request interrupted by user]")));
-    assert!(is_interrupted_request(&json!("Some text [Request interrupted by user] more text")));
+    assert!(is_interrupted_request(&json!(
+        "[Request interrupted by user]"
+    )));
+    assert!(is_interrupted_request(&json!(
+        "Some text [Request interrupted by user] more text"
+    )));
 
     // Array content with interruption
     let array_content = json!([

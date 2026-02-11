@@ -7,10 +7,15 @@ pub fn get_content_preview(content: &serde_json::Value) -> String {
     match content {
         serde_json::Value::String(s) => {
             let preview: String = s.chars().take(100).collect();
-            format!("text: \"{}{}\"", preview, if s.len() > 100 { "..." } else { "" })
+            format!(
+                "text: \"{}{}\"",
+                preview,
+                if s.len() > 100 { "..." } else { "" }
+            )
         }
         serde_json::Value::Array(arr) => {
-            let types: Vec<String> = arr.iter()
+            let types: Vec<String> = arr
+                .iter()
                 .filter_map(|v| v.get("type").and_then(|t| t.as_str()).map(String::from))
                 .collect();
             format!("blocks: [{}]", types.join(", "))
@@ -46,9 +51,7 @@ pub fn get_github_url(project_path: &str) -> Option<String> {
     // Already HTTPS format
     // https://github.com/user/repo.git -> https://github.com/user/repo
     if remote_url.starts_with("https://github.com/") {
-        let url = remote_url
-            .strip_suffix(".git")
-            .unwrap_or(&remote_url);
+        let url = remote_url.strip_suffix(".git").unwrap_or(&remote_url);
         return Some(url.to_string());
     }
 

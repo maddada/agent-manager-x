@@ -66,7 +66,11 @@ pub fn find_claude_processes() -> Vec<ClaudeProcess> {
             let cwd = process.cwd().map(|p| p.to_path_buf());
 
             if is_our_app {
-                trace!("Skipping our own app: pid={}, name={}", pid.as_u32(), process_name);
+                trace!(
+                    "Skipping our own app: pid={}, name={}",
+                    pid.as_u32(),
+                    process_name
+                );
                 continue;
             }
 
@@ -85,7 +89,8 @@ pub fn find_claude_processes() -> Vec<ClaudeProcess> {
                 // Check if parent is Zed's external agent (claude-code-acp)
                 // These are auto-spawned by Zed and not user-initiated terminal sessions
                 if let Some(parent_process) = system.process(parent_pid) {
-                    let parent_cmd: String = parent_process.cmd()
+                    let parent_cmd: String = parent_process
+                        .cmd()
                         .iter()
                         .map(|s| s.to_string_lossy())
                         .collect::<Vec<_>>()
@@ -119,6 +124,9 @@ pub fn find_claude_processes() -> Vec<ClaudeProcess> {
         }
     }
 
-    debug!("Process discovery complete: found {} Claude processes (excluding sub-agents)", processes.len());
+    debug!(
+        "Process discovery complete: found {} Claude processes (excluding sub-agents)",
+        processes.len()
+    );
     processes
 }

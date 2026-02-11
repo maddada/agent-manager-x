@@ -128,9 +128,7 @@ pub fn open_in_terminal(path: String, terminal: String) -> Result<(), String> {
         }
         custom => {
             // Try to open as a macOS app first, then fall back to command with path argument
-            let app_result = Command::new("open")
-                .args(["-a", custom, &path])
-                .spawn();
+            let app_result = Command::new("open").args(["-a", custom, &path]).spawn();
 
             if app_result.is_err() {
                 // Fall back to running the command directly with path as argument

@@ -1,7 +1,7 @@
 use super::{AgentDetector, AgentProcess};
 use crate::process::find_claude_processes;
-use crate::session::{AgentType, Session};
 use crate::session::parser::get_sessions_internal;
+use crate::session::{AgentType, Session};
 
 pub struct ClaudeDetector;
 

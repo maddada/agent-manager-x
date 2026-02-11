@@ -113,13 +113,12 @@ pub fn extract_message_data(jsonl_path: &PathBuf) -> Option<ExtractedMessageData
                 if let Some(c) = &content.content {
                     let text = match c {
                         serde_json::Value::String(s) if !s.is_empty() => Some(s.clone()),
-                        serde_json::Value::Array(arr) => {
-                            arr.iter().find_map(|v| {
-                                v.get("text").and_then(|t| t.as_str())
-                                    .filter(|s| !s.is_empty())
-                                    .map(String::from)
-                            })
-                        }
+                        serde_json::Value::Array(arr) => arr.iter().find_map(|v| {
+                            v.get("text")
+                                .and_then(|t| t.as_str())
+                                .filter(|s| !s.is_empty())
+                                .map(String::from)
+                        }),
                         _ => None,
                     };
 

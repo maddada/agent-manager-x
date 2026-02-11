@@ -36,7 +36,8 @@ pub fn focus_terminal_by_path(path: &str) -> Result<(), String> {
     let escaped_search_term = escape_applescript_string(search_term);
 
     // Fallback: focus by matching session name (which often contains the path) in iTerm2
-    let script = format!(r#"
+    let script = format!(
+        r#"
         tell application "System Events"
             if exists process "iTerm2" then
                 tell application "iTerm2"
@@ -57,7 +58,9 @@ pub fn focus_terminal_by_path(path: &str) -> Result<(), String> {
             end if
         end tell
         return "not found"
-    "#, escaped_search_term);
+    "#,
+        escaped_search_term
+    );
 
     execute_applescript(&script)
 }
