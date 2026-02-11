@@ -93,17 +93,6 @@ export function Settings({ isOpen, onClose }: SettingsProps) {
             onCustomTerminalCommandChange={settings.handleCustomTerminalCommandChange}
           />
 
-          <HotkeySettings
-            hotkey={settings.hotkey}
-            setHotkey={settings.setHotkey}
-            isRecording={settings.isRecording}
-            setIsRecording={settings.setIsRecording}
-            recordedKeys={settings.recordedKeys}
-            setRecordedKeys={settings.setRecordedKeys}
-            onSave={settings.handleSave}
-            onClear={settings.handleClear}
-          />
-
           <NotificationSettings
             notificationInstalled={settings.notificationInstalled}
             notificationLoading={settings.notificationLoading}
@@ -112,6 +101,20 @@ export function Settings({ isOpen, onClose }: SettingsProps) {
             onInstall={settings.handleInstallNotifications}
             onUninstall={settings.handleUninstallNotifications}
             onBellModeToggle={settings.handleBellModeToggle}
+          />
+
+          <HotkeySettings
+            hotkey={settings.hotkey}
+            setHotkey={settings.setHotkey}
+            isRecording={settings.isRecording}
+            setIsRecording={settings.setIsRecording}
+            recordedKeys={settings.recordedKeys}
+            setRecordedKeys={settings.setRecordedKeys}
+            accessibilityGranted={settings.accessibilityGranted}
+            checkingAccessibility={settings.checkingAccessibility}
+            onOpenAccessibilitySettings={settings.openAccessibilitySettings}
+            onSave={settings.handleSave}
+            onClear={settings.handleClear}
           />
 
           {settings.error && (

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { invoke } from '@/platform/native';
-import { STORAGE_KEY, DEFAULT_HOTKEY } from '@/lib/settings';
+import { STORAGE_KEY } from '@/lib/settings';
 
 export type UseHotkeyReturn = {
   hotkey: string;
@@ -12,7 +12,10 @@ export type UseHotkeyReturn = {
   recordedKeys: string[];
   setRecordedKeys: (keys: string[]) => void;
   saved: boolean;
+  accessibilityGranted: boolean;
+  checkingAccessibility: boolean;
   registerHotkey: (shortcut: string) => Promise<boolean>;
+  openAccessibilitySettings: () => Promise<void>;
   handleSave: () => Promise<void>;
   handleClear: () => Promise<void>;
 };
@@ -85,16 +88,30 @@ function normalizeShortcut(shortcut: string): string {
 export function useHotkey(
   setError: (error: string | null) => void
 ): UseHotkeyReturn {
-  const [hotkey, setHotkey] = useState(DEFAULT_HOTKEY);
+  const [hotkey, setHotkey] = useState('');
   const [isRecording, setIsRecording] = useState(false);
   const [recordedKeys, setRecordedKeys] = useState<string[]>([]);
   const [saved, setSaved] = useState(false);
+  const [accessibilityGranted, setAccessibilityGranted] = useState(true);
+  const [checkingAccessibility, setCheckingAccessibility] = useState(false);
+
+  const refreshAccessibilityPermission = useCallback(async () => {
+    setCheckingAccessibility(true);
+    try {
+      const granted = await invoke<boolean>('check_accessibility_permission');
+      setAccessibilityGranted(granted);
+    } catch {
+      setAccessibilityGranted(false);
+    } finally {
+      setCheckingAccessibility(false);
+    }
+  }, []);
 
   // Load saved hotkey on mount
   useEffect(() => {
     const savedHotkey = localStorage.getItem(STORAGE_KEY);
     if (savedHotkey === null) {
-      setHotkey(DEFAULT_HOTKEY);
+      setHotkey('');
       return;
     }
 
@@ -105,13 +122,17 @@ export function useHotkey(
     }
   }, []);
 
+  useEffect(() => {
+    refreshAccessibilityPermission();
+  }, [refreshAccessibilityPermission]);
+
   const registerHotkey = useCallback(async (shortcut: string) => {
     try {
       const normalizedShortcut = normalizeShortcut(shortcut);
       if (!normalizedShortcut) {
         throw new Error('Shortcut cannot be empty');
       }
-      await invoke('register_shortcut', { shortcut: normalizedShortcut });
+      await invoke('register_shortcut', { shortcut: normalizedShortcut, promptPermissions: true });
       setError(null);
       return true;
     } catch (err) {
@@ -122,8 +143,27 @@ export function useHotkey(
 
   const handleSave = async () => {
     const pendingRecordedShortcut = normalizeShortcut(recordedKeys.join('+'));
-    const normalizedShortcut = normalizeShortcut(hotkey) || pendingRecordedShortcut;
+    const normalizedShortcut = pendingRecordedShortcut || normalizeShortcut(hotkey);
+
+    if (!normalizedShortcut) {
+      try {
+        await invoke('unregister_shortcut');
+        await refreshAccessibilityPermission();
+        setIsRecording(false);
+        setRecordedKeys([]);
+        setHotkey('');
+        localStorage.setItem(STORAGE_KEY, '');
+        setError(null);
+        setSaved(true);
+        setTimeout(() => setSaved(false), 2000);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err));
+      }
+      return;
+    }
+
     const success = await registerHotkey(normalizedShortcut);
+    await refreshAccessibilityPermission();
     if (success) {
       setIsRecording(false);
       setRecordedKeys([]);
@@ -142,11 +182,27 @@ export function useHotkey(
 
     try {
       await invoke('unregister_shortcut');
+      await refreshAccessibilityPermission();
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
   };
+
+  const openAccessibilitySettings = useCallback(async () => {
+    try {
+      await invoke('open_accessibility_settings');
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      return;
+    }
+
+    // Give System Settings time to update the permission view state.
+    setTimeout(() => {
+      void refreshAccessibilityPermission();
+    }, 500);
+  }, [refreshAccessibilityPermission, setError]);
 
   return {
     hotkey,
@@ -156,7 +212,10 @@ export function useHotkey(
     recordedKeys,
     setRecordedKeys,
     saved,
+    accessibilityGranted,
+    checkingAccessibility,
     registerHotkey,
+    openAccessibilitySettings,
     handleSave,
     handleClear,
   };
@@ -166,22 +225,15 @@ export function useHotkey(
 export function useHotkeyInit() {
   useEffect(() => {
     const savedHotkey = localStorage.getItem(STORAGE_KEY);
-    if (savedHotkey === null) {
-      const initialHotkey = normalizeShortcut(DEFAULT_HOTKEY) || DEFAULT_HOTKEY;
-      localStorage.setItem(STORAGE_KEY, initialHotkey);
-      invoke('register_shortcut', { shortcut: initialHotkey }).catch(console.error);
-      return;
-    }
+    if (savedHotkey !== null) {
+      const startupHotkey = normalizeShortcut(savedHotkey);
+      if (startupHotkey !== savedHotkey) {
+        localStorage.setItem(STORAGE_KEY, startupHotkey);
+      }
 
-    const startupHotkey = normalizeShortcut(savedHotkey);
-    if (startupHotkey !== savedHotkey) {
-      localStorage.setItem(STORAGE_KEY, startupHotkey);
+      if (startupHotkey) {
+        invoke('register_shortcut', { shortcut: startupHotkey, promptPermissions: false }).catch(console.error);
+      }
     }
-
-    if (!startupHotkey) {
-      return;
-    }
-
-    invoke('register_shortcut', { shortcut: startupHotkey }).catch(console.error);
   }, []);
 }

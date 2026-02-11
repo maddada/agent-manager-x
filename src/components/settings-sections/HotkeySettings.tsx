@@ -10,6 +10,9 @@ export type HotkeySettingsProps = {
   setIsRecording: (recording: boolean) => void;
   recordedKeys: string[];
   setRecordedKeys: (keys: string[]) => void;
+  accessibilityGranted: boolean;
+  checkingAccessibility: boolean;
+  onOpenAccessibilitySettings: () => void;
   onSave: () => void;
   onClear: () => void;
 };
@@ -21,6 +24,9 @@ export function HotkeySettings({
   setIsRecording,
   recordedKeys,
   setRecordedKeys,
+  accessibilityGranted,
+  checkingAccessibility,
+  onOpenAccessibilitySettings,
   onSave,
   onClear,
 }: HotkeySettingsProps) {
@@ -79,6 +85,22 @@ export function HotkeySettings({
   return (
     <div className='space-y-3'>
       <div className='text-sm font-medium text-foreground'>Global Hotkey</div>
+      {!accessibilityGranted && (
+        <div className='rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-200 space-y-2'>
+          <div className='font-medium'>Accessibility permission is not enabled.</div>
+          <div>Global show/hide hotkeys require this permission on macOS.</div>
+          <div>Enable the running app in Accessibility (Agent Manager X in builds, Bun/launcher in dev mode).</div>
+          <Button
+            variant='outline'
+            size='sm'
+            className='h-8'
+            onClick={onOpenAccessibilitySettings}
+            disabled={checkingAccessibility}
+          >
+            Open Accessibility Settings
+          </Button>
+        </div>
+      )}
       <div className='flex gap-2'>
         <div
           className={`flex-1 flex items-center justify-center h-11 rounded-lg border cursor-pointer transition-colors ${

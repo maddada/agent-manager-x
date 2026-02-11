@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process';
 import { focusSession as focusTerminalSession } from './focusTerminal';
 import { killSessionProcess } from './killSession';
 import {
@@ -14,6 +15,7 @@ import { getAllSessions } from './sessions';
 type WindowController = {
   isMinimized(): boolean;
   show(): void;
+  close(): void;
   minimize(): void;
   unminimize(): void;
   focus(): void;
@@ -39,40 +41,168 @@ let currentShortcut: string | null = null;
 let globalShortcutApi: GlobalShortcutApi | null = null;
 let utilsApi: UtilsApi | null = null;
 const appBootTimeMs = Date.now();
+const APP_PROCESS_ID = process.pid;
+const APP_PARENT_PROCESS_ID = process.ppid;
+const APP_BUNDLE_ID = (
+  typeof process.env.ELECTROBUN_APP_IDENTIFIER === 'string'
+    ? process.env.ELECTROBUN_APP_IDENTIFIER.trim()
+    : ''
+) || 'sh.madda.agentmanagerx';
 
-function toggleMainWindow(): void {
-  let createdWindow = false;
+function runAppleScript(script: string) {
+  return spawnSync('osascript', ['-e', script], { encoding: 'utf8' });
+}
+
+function runAppleScriptBoolean(script: string): boolean {
+  const result = runAppleScript(script);
+  return result.status === 0 && String(result.stdout).trim().toLowerCase() === 'true';
+}
+
+function runAppleScriptText(script: string): string | null {
+  const result = runAppleScript(script);
+  if (result.status !== 0) {
+    return null;
+  }
+  return String(result.stdout).trim();
+}
+
+function setCurrentAppVisible(visible: boolean): boolean {
+  if (process.platform !== 'darwin') {
+    return false;
+  }
+
+  const byBundleIdScript = `tell application id "${APP_BUNDLE_ID}" to set visible to ${visible ? 'true' : 'false'}`;
+  if (runAppleScript(byBundleIdScript).status === 0) {
+    return true;
+  }
+
+  const pidCandidates = [APP_PROCESS_ID, APP_PARENT_PROCESS_ID].filter((pid) => Number.isInteger(pid) && pid > 1);
+  for (const pid of pidCandidates) {
+    const byPidScript = `tell application "System Events"
+if exists (first application process whose unix id is ${pid}) then
+  set visible of first application process whose unix id is ${pid} to ${visible ? 'true' : 'false'}
+  return true
+end if
+return false
+end tell`;
+    if (runAppleScriptBoolean(byPidScript)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function activateCurrentApp(): void {
+  if (process.platform !== 'darwin') {
+    return;
+  }
+
+  const activateByBundleIdScript = `tell application id "${APP_BUNDLE_ID}" to activate`;
+  runAppleScript(activateByBundleIdScript);
+}
+
+function isCurrentAppFrontmost(): boolean {
+  if (process.platform !== 'darwin') {
+    return false;
+  }
+
+  const frontmostPidText = runAppleScriptText('tell application "System Events" to get unix id of first application process whose frontmost is true');
+  const frontmostPid = frontmostPidText ? Number.parseInt(frontmostPidText, 10) : Number.NaN;
+  if (!Number.isNaN(frontmostPid) && (frontmostPid === APP_PROCESS_ID || frontmostPid === APP_PARENT_PROCESS_ID)) {
+    return true;
+  }
+
+  const byBundleScript = `tell application "System Events"
+if not (exists (first application process whose frontmost is true)) then
+  return false
+end if
+return (bundle identifier of first application process whose frontmost is true) is "${APP_BUNDLE_ID}"
+end tell`;
+  return runAppleScriptBoolean(byBundleScript);
+}
+
+function showMainWindow(): void {
+  if (process.platform === 'darwin') {
+    setCurrentAppVisible(true);
+    activateCurrentApp();
+  }
+
+  // Guard against spurious shortcut callbacks fired during initial registration.
+  // Keep startup deterministic: first shortcut events should surface the app.
+  if (Date.now() - appBootTimeMs < 2_000) {
+    if (!mainWindow && mainWindowFactory) {
+      mainWindow = mainWindowFactory();
+    }
+    if (!mainWindow) {
+      return;
+    }
+    if (mainWindow.isMinimized()) {
+      mainWindow.unminimize();
+    }
+    mainWindow.show();
+    mainWindow.focus();
+    return;
+  }
+
   if (!mainWindow && mainWindowFactory) {
     mainWindow = mainWindowFactory();
-    createdWindow = true;
   }
 
   if (!mainWindow) {
     return;
   }
 
-  if (createdWindow) {
-    mainWindow.show();
-    mainWindow.focus();
-    return;
-  }
-
-  // Guard against spurious shortcut callbacks fired during initial registration.
-  // Keep startup deterministic: first shortcut events should surface the app, not hide it.
-  if (Date.now() - appBootTimeMs < 2_000) {
-    if (mainWindow.isMinimized()) {
-      mainWindow.unminimize();
-    }
-    mainWindow.focus();
-    return;
-  }
-
   if (mainWindow.isMinimized()) {
     mainWindow.unminimize();
-    mainWindow.focus();
-  } else {
+  }
+
+  mainWindow.show();
+  mainWindow.focus();
+}
+
+function hideMainWindow(): void {
+  if (process.platform === 'darwin') {
+    if (setCurrentAppVisible(false)) {
+      return;
+    }
+  }
+
+  if (!mainWindow) {
+    return;
+  }
+
+  if (!mainWindow.isMinimized()) {
     mainWindow.minimize();
   }
+}
+
+function hasMacUiScriptingAccess(): boolean {
+  if (process.platform !== 'darwin') {
+    return true;
+  }
+
+  const requiresAccessibilityScript = 'tell application "System Events" to tell process "Finder" to count UI elements';
+  const result = runAppleScript(requiresAccessibilityScript);
+  return result.status === 0;
+}
+
+function toggleMainWindowFromHotkey(): void {
+  if (process.platform === 'darwin' && isCurrentAppFrontmost()) {
+    hideMainWindow();
+    return;
+  }
+
+  showMainWindow();
+}
+
+function requestMacGlobalHotkeyPermissions(): void {
+  if (process.platform !== 'darwin') {
+    return;
+  }
+
+  // Accessibility permission is required for reliable global keyboard capture.
+  spawnSync('open', ['x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility'], { stdio: 'ignore' });
 }
 
 export function bindMainWindow(window: WindowController): void {
@@ -143,7 +273,26 @@ export const commandHandlers = {
     return null;
   },
 
-  register_shortcut: (params: { shortcut?: unknown } = {}) => {
+  toggle_main_window: () => {
+    toggleMainWindowFromHotkey();
+    return null;
+  },
+
+  hide_app: () => {
+    hideMainWindow();
+    return null;
+  },
+
+  check_accessibility_permission: () => {
+    return hasMacUiScriptingAccess();
+  },
+
+  open_accessibility_settings: () => {
+    requestMacGlobalHotkeyPermissions();
+    return null;
+  },
+
+  register_shortcut: (params: { shortcut?: unknown; promptPermissions?: unknown } = {}) => {
     if (!globalShortcutApi) {
       throw new Error('Global shortcut API is not initialized');
     }
@@ -153,13 +302,21 @@ export const commandHandlers = {
       throw new Error('Missing or invalid shortcut');
     }
 
+    const promptPermissions = params.promptPermissions === true;
+    if (!hasMacUiScriptingAccess()) {
+      if (promptPermissions) {
+        requestMacGlobalHotkeyPermissions();
+      }
+      throw new Error('Global hotkey needs macOS Accessibility permission. Enable Agent Manager X in Privacy & Security > Accessibility, then save again.');
+    }
+
     if (currentShortcut) {
       globalShortcutApi.unregister(currentShortcut);
       currentShortcut = null;
     }
 
     const ok = globalShortcutApi.register(shortcut, () => {
-      toggleMainWindow();
+      toggleMainWindowFromHotkey();
     });
 
     if (!ok) {

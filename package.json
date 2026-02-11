@@ -10,7 +10,7 @@
     "hmr": "vite --port 1533",
     "build:frontend": "bun run link:electrobun && tsc && vite build",
     "build": "bun run link:electrobun && bun run build:frontend && bun ../electrobun/package/bin/electrobun.cjs build",
-    "build:prod": "bun run link:electrobun && bun run build:frontend && bun ../electrobun/package/bin/electrobun.cjs build --channel prod",
+    "build:prod": "bun run link:electrobun && bun run build:frontend && bun ../electrobun/package/bin/electrobun.cjs build --env=stable",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
