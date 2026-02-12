@@ -11,6 +11,9 @@ SIGNING_IDENTITY="Developer ID Application: Mohamad Youssef (KTKP595G3B)"
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 TAURI_DIR="$PROJECT_ROOT/src-tauri"
 HOMEBREW_TAP_REPO="maddada/homebrew-tap"
+NOTARY_PROFILE="notarytool-profile"
+RELEASE_DIR="$PROJECT_ROOT/release"
+BUNDLE_DIR="$TAURI_DIR/target/release/bundle/macos"
 
 # Get version from tauri.conf.json
 VERSION=$(grep '"version"' "$TAURI_DIR/tauri.conf.json" | head -1 | sed 's/.*"version": "\([^"]*\)".*/\1/')
@@ -20,107 +23,70 @@ echo "Version: $VERSION"
 echo "Project root: $PROJECT_ROOT"
 echo ""
 
-# Notarization uses keychain profile (set up via: xcrun notarytool store-credentials "notarytool-profile")
-NOTARY_PROFILE="notarytool-profile"
-
-# Function to build for a specific architecture
-build_arch() {
-    local arch=$1
-    local target=$2
-
-    echo "=== Building for $arch ($target) ==="
-    cd "$PROJECT_ROOT"
-    pnpm run tauri build -- --target "$target"
-    echo "Build complete for $arch"
-}
-
-# Function to sign app with hardened runtime
+# Function to sign an app bundle with hardened runtime
 sign_app() {
-    local arch=$1
-    local target=$2
-    local app_path="$TAURI_DIR/target/$target/release/bundle/macos/${APP_NAME}.app"
-
-    echo "=== Signing app for $arch ==="
+    local app_path=$1
+    echo "  Signing: $app_path"
     codesign --force --deep --sign "$SIGNING_IDENTITY" --timestamp --options runtime "$app_path"
-    echo "Signed: $app_path"
 }
 
-# Function to create DMG from signed app with Applications shortcut
-create_dmg() {
+# Function to create and sign a DMG
+create_signed_dmg() {
     local arch=$1
-    local target=$2
+    local app_path=$2
     local dmg_name="AgentManagerX_${VERSION}_${arch}.dmg"
-    local app_path="$TAURI_DIR/target/$target/release/bundle/macos/${APP_NAME}.app"
-    local output_dir="$PROJECT_ROOT/release"
-    local dmg_path="$output_dir/$dmg_name"
+    local dmg_path="$RELEASE_DIR/$dmg_name"
     local dmg_temp_dir=$(mktemp -d)
 
-    echo "=== Creating DMG for $arch ==="
-    mkdir -p "$output_dir"
+    echo "  Creating DMG: $dmg_name"
+    mkdir -p "$RELEASE_DIR"
     rm -f "$dmg_path"
 
-    # Copy signed app and create Applications symlink
     cp -R "$app_path" "$dmg_temp_dir/"
     ln -s /Applications "$dmg_temp_dir/Applications"
-
-    # Create DMG with both app and Applications shortcut
-    hdiutil create -volname "Agent Manager X" -srcfolder "$dmg_temp_dir" -ov -format UDZO "$dmg_path"
-
-    # Cleanup
+    hdiutil create -volname "$APP_NAME" -srcfolder "$dmg_temp_dir" -ov -format UDZO "$dmg_path"
     rm -rf "$dmg_temp_dir"
-    echo "DMG created at $dmg_path"
-}
 
-# Function to sign DMG
-sign_dmg() {
-    local arch=$1
-    local dmg_name="AgentManagerX_${VERSION}_${arch}.dmg"
-    local dmg_path="$PROJECT_ROOT/release/$dmg_name"
-
-    echo "=== Signing DMG for $arch ==="
+    echo "  Signing DMG"
     codesign --force --sign "$SIGNING_IDENTITY" --timestamp "$dmg_path"
-    echo "Signed: $dmg_path"
+    echo "  DMG ready: $dmg_path"
 }
 
-# Function to notarize DMG
+# Function to notarize a DMG
 notarize_dmg() {
     local arch=$1
     local dmg_name="AgentManagerX_${VERSION}_${arch}.dmg"
-    local dmg_path="$PROJECT_ROOT/release/$dmg_name"
+    local dmg_path="$RELEASE_DIR/$dmg_name"
 
-    echo "=== Notarizing DMG for $arch ==="
+    echo "=== Notarizing $dmg_name ==="
     xcrun notarytool submit "$dmg_path" \
         --keychain-profile "$NOTARY_PROFILE" \
         --wait
 
-    echo "=== Stapling notarization ticket for $arch ==="
+    echo "  Stapling notarization ticket"
     xcrun stapler staple "$dmg_path"
-    echo "Notarization complete for $arch"
+    echo "  Notarization complete"
 }
 
 # Function to calculate SHA256
 calc_sha256() {
     local arch=$1
-    local dmg_name="AgentManagerX_${VERSION}_${arch}.dmg"
-    local dmg_path="$PROJECT_ROOT/release/$dmg_name"
-
+    local dmg_path="$RELEASE_DIR/AgentManagerX_${VERSION}_${arch}.dmg"
     shasum -a 256 "$dmg_path" | awk '{print $1}'
 }
 
 # Function to create GitHub release
 create_github_release() {
-    local aarch64_dmg="$PROJECT_ROOT/release/AgentManagerX_${VERSION}_aarch64.dmg"
-    local x64_dmg="$PROJECT_ROOT/release/AgentManagerX_${VERSION}_x64.dmg"
+    local aarch64_dmg="$RELEASE_DIR/AgentManagerX_${VERSION}_aarch64.dmg"
+    local x64_dmg="$RELEASE_DIR/AgentManagerX_${VERSION}_x64.dmg"
     local aarch64_sha=$(calc_sha256 "aarch64")
     local x64_sha=$(calc_sha256 "x64")
 
     echo "=== Creating GitHub Release ==="
 
-    # Create and push tag
     git tag "v$VERSION" 2>/dev/null || echo "Tag v$VERSION already exists"
     git push origin "v$VERSION" 2>/dev/null || echo "Tag already pushed"
 
-    # Create release with DMGs
     gh release create "v$VERSION" \
         "$aarch64_dmg" \
         "$x64_dmg" \
@@ -138,7 +104,6 @@ $x64_sha  AgentManagerX_${VERSION}_x64.dmg
 
 ## Install via Homebrew
 \`\`\`bash
-brew tap maddada/tap
 brew install --cask maddada/tap/ai-manager
 \`\`\`
 "
@@ -203,114 +168,87 @@ main() {
     local skip_notarize=false
     local skip_github=false
     local skip_homebrew=false
-    local arch_filter=""
 
-    # Parse arguments
     while [[ $# -gt 0 ]]; do
         case $1 in
-            --skip-build)
-                skip_build=true
-                shift
-                ;;
-            --skip-notarize)
-                skip_notarize=true
-                shift
-                ;;
-            --skip-github)
-                skip_github=true
-                shift
-                ;;
-            --skip-homebrew)
-                skip_homebrew=true
-                shift
-                ;;
-            --arch)
-                arch_filter=$2
-                shift 2
-                ;;
+            --skip-build) skip_build=true; shift ;;
+            --skip-notarize) skip_notarize=true; shift ;;
+            --skip-github) skip_github=true; shift ;;
+            --skip-homebrew) skip_homebrew=true; shift ;;
             --help)
                 echo "Usage: $0 [options]"
-                echo ""
-                echo "Options:"
-                echo "  --skip-build      Skip the build step (use existing builds)"
-                echo "  --skip-notarize   Skip notarization (for testing)"
+                echo "  --skip-build      Skip building (use existing builds)"
+                echo "  --skip-notarize   Skip Apple notarization"
                 echo "  --skip-github     Skip GitHub release creation"
                 echo "  --skip-homebrew   Skip Homebrew tap update"
-                echo "  --arch <arch>     Build only for specific arch (aarch64 or x64)"
-                echo "  --help            Show this help message"
                 exit 0
                 ;;
-            *)
-                echo "Unknown option: $1"
-                exit 1
-                ;;
+            *) echo "Unknown option: $1"; exit 1 ;;
         esac
     done
 
-    # Determine which architectures to build
-    local archs=()
-    if [ -z "$arch_filter" ]; then
-        archs=("aarch64" "x64")
-    else
-        archs=("$arch_filter")
-    fi
+    # Staging directory for prepared app bundles
+    local staging_dir="$PROJECT_ROOT/release/staging"
+    mkdir -p "$staging_dir"
 
-    # Helper function to map arch to target
-    get_target() {
-        case "$1" in
-            aarch64) echo "aarch64-apple-darwin" ;;
-            x64) echo "x86_64-apple-darwin" ;;
-        esac
-    }
-
-    # Build
     if [ "$skip_build" = false ]; then
-        for arch in "${archs[@]}"; do
-            build_arch "$arch" "$(get_target "$arch")"
-        done
+        # === Step 1: Build aarch64 (native) ===
+        echo "=== Building aarch64 (native) ==="
+        cd "$PROJECT_ROOT"
+        pnpm run tauri build
+        echo "Build complete for aarch64"
+
+        # Copy the aarch64 bundle to staging
+        rm -rf "$staging_dir/aarch64"
+        mkdir -p "$staging_dir/aarch64"
+        cp -R "$BUNDLE_DIR/${APP_NAME}.app" "$staging_dir/aarch64/"
+
+        # === Step 2: Build x64 (cross-compile) ===
+        echo "=== Building x64 (cross-compile) ==="
+        cd "$PROJECT_ROOT"
+        pnpm run tauri build -- --target x86_64-apple-darwin
+        echo "Build complete for x64"
+
+        # Create x64 bundle by copying the app template and swapping the binary
+        rm -rf "$staging_dir/x64"
+        mkdir -p "$staging_dir/x64"
+        cp -R "$BUNDLE_DIR/${APP_NAME}.app" "$staging_dir/x64/"
+        # Replace the binary with the x64 one
+        cp "$TAURI_DIR/target/x86_64-apple-darwin/release/agent-manager-x" \
+           "$staging_dir/x64/${APP_NAME}.app/Contents/MacOS/agent-manager-x"
     fi
 
-    # Sign apps
-    for arch in "${archs[@]}"; do
-        sign_app "$arch" "$(get_target "$arch")"
-    done
+    # === Step 3: Sign and create DMGs ===
+    echo "=== Signing aarch64 ==="
+    sign_app "$staging_dir/aarch64/${APP_NAME}.app"
+    create_signed_dmg "aarch64" "$staging_dir/aarch64/${APP_NAME}.app"
 
-    # Create DMGs
-    for arch in "${archs[@]}"; do
-        create_dmg "$arch" "$(get_target "$arch")"
-    done
+    echo "=== Signing x64 ==="
+    sign_app "$staging_dir/x64/${APP_NAME}.app"
+    create_signed_dmg "x64" "$staging_dir/x64/${APP_NAME}.app"
 
-    # Sign DMGs
-    for arch in "${archs[@]}"; do
-        sign_dmg "$arch"
-    done
-
-    # Notarize DMGs
+    # === Step 4: Notarize ===
     if [ "$skip_notarize" = false ]; then
-        for arch in "${archs[@]}"; do
-            notarize_dmg "$arch"
-        done
+        notarize_dmg "aarch64"
+        notarize_dmg "x64"
     fi
 
-    # Print summary
+    # === Summary ===
     echo ""
     echo "=== Build Complete ==="
     echo "Version: $VERSION"
-    echo ""
-    echo "DMG files in $PROJECT_ROOT/release/:"
-    for arch in "${archs[@]}"; do
-        local dmg_name="AgentManagerX_${VERSION}_${arch}.dmg"
+    for arch in aarch64 x64; do
         local sha=$(calc_sha256 "$arch")
-        echo "  $dmg_name"
+        echo "  AgentManagerX_${VERSION}_${arch}.dmg"
         echo "    SHA256: $sha"
     done
 
-    # Create GitHub release
+    # === Step 5: GitHub release ===
     if [ "$skip_github" = false ]; then
         create_github_release
     fi
 
-    # Update Homebrew tap
+    # === Step 6: Homebrew tap ===
     if [ "$skip_homebrew" = false ]; then
         update_homebrew
     fi
