@@ -7,7 +7,7 @@ set -e
 # Configuration
 APP_NAME="Agent Manager X"
 BUNDLE_ID="com.agent-manager-x"
-SIGNING_IDENTITY="YOUR_SIGNING_IDENTITY_HERE"
+SIGNING_IDENTITY="Developer ID Application: Mohamad Youssef (KTKP595G3B)"
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 TAURI_DIR="$PROJECT_ROOT/src-tauri"
 HOMEBREW_TAP_REPO="maddada/homebrew-tap"
@@ -147,7 +147,7 @@ $x64_sha  AgentManagerX_${VERSION}_x64.dmg
 ## Install via Homebrew
 \`\`\`bash
 brew tap maddada/tap
-brew install --cask agent-manager-x
+brew install --cask maddada/tap/ai-manager
 \`\`\`
 "
 
@@ -165,8 +165,8 @@ update_homebrew() {
     cd "$tmp_dir"
     gh repo clone "$HOMEBREW_TAP_REPO" homebrew-tap
 
-    cat > homebrew-tap/Casks/agent-manager-x.rb << EOF
-cask "agent-manager-x" do
+    cat > homebrew-tap/Casks/ai-manager.rb << EOF
+cask "ai-manager" do
   version "$VERSION"
 
   on_arm do
@@ -195,8 +195,8 @@ end
 EOF
 
     cd homebrew-tap
-    git add Casks/agent-manager-x.rb
-    git commit -m "bump agent-manager-x to v$VERSION"
+    git add Casks/ai-manager.rb
+    git commit -m "Add ai-manager cask v$VERSION"
     git push
 
     cd "$PROJECT_ROOT"
@@ -327,7 +327,7 @@ main() {
     echo "=== Release Complete ==="
     echo "Version: $VERSION"
     echo "GitHub: https://github.com/maddada/agent-manager-x/releases/tag/v$VERSION"
-    echo "Homebrew: brew install --cask maddada/tap/agent-manager-x"
+    echo "Homebrew: brew install --cask maddada/tap/ai-manager"
 }
 
 main "$@"

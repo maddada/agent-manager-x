@@ -11,6 +11,16 @@ Shows RAM and CPU usage for every running session and lets you code Stale or Idl
 
 ---
 
+## Installation
+
+```bash
+brew install --cask maddada/tap/ai-manager
+```
+
+Or download the latest DMG from [GitHub Releases](https://github.com/maddada/agent-manager-x/releases).
+
+---
+
 <img width="4281" height="4218" alt="screenshot-with-background-12" src="https://github.com/user-attachments/assets/2787c40e-9c74-41e8-8e37-1396f18f1056" />
 
 ---
