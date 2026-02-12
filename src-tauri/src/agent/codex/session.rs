@@ -45,7 +45,7 @@ pub fn get_codex_sessions(processes: &[AgentProcess]) -> Vec<Session> {
         return sessions;
     }
 
-    let codex_dirs = get_codex_sessions_dirs();
+    let codex_dirs = get_codex_sessions_dirs(processes);
     log::debug!("Codex session directories to scan: {:?}", codex_dirs);
     if codex_dirs.is_empty() {
         log::warn!("No home directory found, skipping Codex session scan");
@@ -77,6 +77,20 @@ pub fn get_codex_sessions(processes: &[AgentProcess]) -> Vec<Session> {
     let mut used: Vec<bool> = vec![false; session_files.len()];
 
     for process in processes {
+        if let Some(active_path) = &process.active_session_file {
+            if let Some(active_file) = load_direct_session_file(active_path) {
+                if let Some(session) = build_session_from_file(&active_file, process) {
+                    log::debug!(
+                        "Codex session matched via open file: pid={}, file={:?}",
+                        process.pid,
+                        active_path
+                    );
+                    sessions.push(session);
+                    continue;
+                }
+            }
+        }
+
         let mut assigned_index: Option<usize> = None;
         if let Some(cwd) = &process.cwd {
             let cwd_str = cwd.to_string_lossy().to_string();
@@ -126,7 +140,7 @@ pub fn get_codex_sessions(processes: &[AgentProcess]) -> Vec<Session> {
             SessionStatus::Stale
         };
 
-        let is_background = is_background_session(&project_path, &None);
+        let is_background = is_background_session(&project_path, &None, process.cpu_usage);
         let fallback_session = Session {
             id: format!("codex-{}", process.pid),
             agent_type: AgentType::Codex,
@@ -150,8 +164,13 @@ pub fn get_codex_sessions(processes: &[AgentProcess]) -> Vec<Session> {
     sessions
 }
 
+fn load_direct_session_file(path: &Path) -> Option<CodexSessionFile> {
+    let modified = path.metadata().and_then(|m| m.modified()).ok()?;
+    get_cached_codex_session_file(path, modified)
+}
+
 fn codex_session_parse_limit(process_count: usize) -> usize {
-    const FILES_PER_PROCESS: usize = 2;
+    const FILES_PER_PROCESS: usize = 12;
     const MAX_PARSE_FILES: usize = 120;
     let min_parse_files = process_count.max(2);
 
@@ -160,7 +179,10 @@ fn codex_session_parse_limit(process_count: usize) -> usize {
         .clamp(min_parse_files, MAX_PARSE_FILES)
 }
 
-fn collect_codex_session_files(codex_dirs: &[PathBuf], parse_limit: usize) -> Vec<CodexSessionFile> {
+fn collect_codex_session_files(
+    codex_dirs: &[PathBuf],
+    parse_limit: usize,
+) -> Vec<CodexSessionFile> {
     let mut candidates = Vec::new();
     let mut seen_paths: HashSet<PathBuf> = HashSet::new();
     let max_candidates = parse_limit.saturating_mul(3).max(parse_limit);
@@ -270,12 +292,25 @@ fn get_cached_codex_session_file(path: &Path, modified: SystemTime) -> Option<Co
     parsed
 }
 
-fn get_codex_sessions_dirs() -> Vec<PathBuf> {
+fn get_codex_sessions_dirs(processes: &[AgentProcess]) -> Vec<PathBuf> {
     let Some(home) = dirs::home_dir() else {
         return Vec::new();
     };
 
-    // Keep the legacy default location first, then profile-specific locations.
+    // Prefer roots inferred from running processes (CODEX_HOME), because that is
+    // the most reliable signal for which profile owns the active session.
+    let process_dirs = dedupe_paths(
+        processes
+            .iter()
+            .filter_map(|process| process.data_home.clone())
+            .map(resolve_profile_sessions_dir)
+            .collect(),
+    );
+    if !process_dirs.is_empty() {
+        return process_dirs;
+    }
+
+    // Fallback for environments where CODEX_HOME isn't present.
     let mut dirs = vec![home.join(".codex").join("sessions")];
 
     for profile_root in [
@@ -334,7 +369,7 @@ fn build_session_from_file(file: &CodexSessionFile, process: &AgentProcess) -> O
         .or_else(|| file.session_id.clone())
         .unwrap_or_else(|| format!("codex-{}", process.pid));
 
-    let is_background = is_background_session(&project_path, &file.last_message);
+    let is_background = is_background_session(&project_path, &file.last_message, process.cpu_usage);
 
     if project_path == "/" || project_name == "Unknown" {
         log::warn!(
@@ -373,14 +408,28 @@ fn build_session_from_file(file: &CodexSessionFile, process: &AgentProcess) -> O
     })
 }
 
-fn is_background_session(project_path: &str, last_message: &Option<String>) -> bool {
-    if project_path != "/" {
-        return false;
-    }
-    last_message
+fn is_background_session(
+    project_path: &str,
+    last_message: &Option<String>,
+    cpu_usage: f32,
+) -> bool {
+    let no_meaningful_message = last_message
         .as_ref()
         .map(|msg| msg.trim().is_empty())
-        .unwrap_or(true)
+        .unwrap_or(true);
+
+    if !no_meaningful_message {
+        return false;
+    }
+
+    // Preserve legacy behavior for root-path placeholder sessions.
+    if project_path == "/" {
+        return true;
+    }
+
+    // Codex helper/background processes often have a cwd but no conversation
+    // content and near-zero CPU. Keep those out of the main session list.
+    cpu_usage <= 1.0
 }
 
 fn parse_codex_session_file(path: &Path, modified: SystemTime) -> Option<CodexSessionFile> {

@@ -12,6 +12,8 @@ use crate::session::status_sort_priority;
 
 use super::jsonl_files::{find_session_for_process, get_recently_active_jsonl_files};
 use super::path_conversion::{convert_dir_name_to_path, convert_path_to_dir_name};
+use super::session_parser::parse_session_file;
+use super::subagent::count_active_subagents;
 
 /// Track previous status for each session to detect transitions
 static PREVIOUS_STATUS: Lazy<Mutex<HashMap<String, SessionStatus>>> =
@@ -29,10 +31,71 @@ pub fn get_sessions_internal(processes: &[AgentProcess], agent_type: AgentType) 
     debug!("Found {} processes total", processes.len());
 
     let mut sessions = Vec::new();
+    let mut direct_matched_pids: HashSet<u32> = HashSet::new();
+
+    // Prefer exact, open session files from the live process when available.
+    for process in processes {
+        let Some(active_session_file) = &process.active_session_file else {
+            continue;
+        };
+
+        let project_path = process
+            .cwd
+            .as_ref()
+            .map(|p| p.to_string_lossy().to_string())
+            .unwrap_or_else(|| "/".to_string());
+
+        let Some(mut session) = parse_session_file(
+            active_session_file,
+            &project_path,
+            process.pid,
+            process.cpu_usage,
+            process.memory_bytes,
+            agent_type.clone(),
+        ) else {
+            continue;
+        };
+
+        if let Some(project_dir) = active_session_file.parent() {
+            session.active_subagent_count =
+                count_active_subagents(&project_dir.to_path_buf(), &session.id);
+        }
+
+        // Track status transitions
+        let mut prev_status_map = PREVIOUS_STATUS.lock().unwrap_or_else(|e| e.into_inner());
+        let prev_status = prev_status_map.get(&session.id).cloned();
+
+        if let Some(prev) = &prev_status {
+            if *prev != session.status {
+                warn!(
+                    "STATUS TRANSITION: project={}, {:?} -> {:?}, cpu={:.1}%, file_age=?, last_msg_role={:?}",
+                    session.project_name, prev, session.status, session.cpu_usage, session.last_message_role
+                );
+            }
+        }
+
+        prev_status_map.insert(session.id.clone(), session.status.clone());
+        drop(prev_status_map);
+
+        info!(
+            "Session created from active file: id={}, project={}, status={:?}, pid={}, cpu={:.1}%, file={:?}",
+            session.id,
+            session.project_name,
+            session.status,
+            session.pid,
+            session.cpu_usage,
+            active_session_file
+        );
+        sessions.push(session);
+        direct_matched_pids.insert(process.pid);
+    }
 
     // Build a map of cwd -> list of processes (multiple sessions can run in same folder)
     let mut cwd_to_processes: HashMap<String, Vec<&AgentProcess>> = HashMap::new();
     for process in processes {
+        if direct_matched_pids.contains(&process.pid) {
+            continue;
+        }
         if let Some(cwd) = &process.cwd {
             let cwd_str = cwd.to_string_lossy().to_string();
             debug!("Mapping process pid={} to cwd={}", process.pid, cwd_str);
@@ -101,7 +164,8 @@ pub fn get_sessions_internal(processes: &[AgentProcess], agent_type: AgentType) 
             if !path.is_dir() {
                 trace!(
                     "Candidate project directory not found in {:?}: {}",
-                    claude_dir, dir_name
+                    claude_dir,
+                    dir_name
                 );
                 continue;
             }

@@ -11,6 +11,8 @@ pub struct AgentProcess {
     pub cpu_usage: f32,
     pub memory_bytes: u64,
     pub cwd: Option<std::path::PathBuf>,
+    pub data_home: Option<std::path::PathBuf>,
+    pub active_session_file: Option<std::path::PathBuf>,
 }
 
 /// Trait for detecting and parsing agent sessions

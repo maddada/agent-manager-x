@@ -4,9 +4,9 @@
   "version": "0.1.19",
   "identifier": "com.agent-manager-x",
   "build": {
-    "beforeDevCommand": "npm run dev",
+    "beforeDevCommand": "pnpm run dev:vite",
     "devUrl": "http://localhost:1533",
-    "beforeBuildCommand": "npm run build",
+    "beforeBuildCommand": "pnpm run build",
     "frontendDist": "../dist"
   },
   "app": {

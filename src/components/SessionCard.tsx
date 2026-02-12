@@ -48,17 +48,16 @@ export function SessionCard({ session, defaultEditor, onKill }: SessionCardProps
     handleCardClick,
   } = useSessionCard({ session, defaultEditor, onKill });
 
-  // Instantly hide card when killing - provides immediate feedback
-  if (isKilling) {
-    return null;
-  }
-
   const config = statusConfig[session.status];
   const hasMessage = !!session.lastMessage && session.lastMessage.trim().length > 0;
   const fallbackMessage =
     session.status === 'idle' || session.status === 'stale' ? 'No recent messages' : config.label;
 
   useEffect(() => {
+    if (isKilling) {
+      return;
+    }
+
     const GAP_PX = 8; // gap-2 between metric tokens
     const REQUIRED_SECTION_GAP_PX = 14;
     const RESTORE_SECTION_GAP_PX = 28;
@@ -106,6 +105,7 @@ export function SessionCard({ session, defaultEditor, onKill }: SessionCardProps
       resizeObserver.disconnect();
     };
   }, [
+    isKilling,
     showPid,
     session.pid,
     session.cpuUsage,
@@ -114,6 +114,11 @@ export function SessionCard({ session, defaultEditor, onKill }: SessionCardProps
     session.activeSubagentCount,
     config.label,
   ]);
+
+  // Instantly hide card when killing - provides immediate feedback
+  if (isKilling) {
+    return null;
+  }
 
   return (
     <>

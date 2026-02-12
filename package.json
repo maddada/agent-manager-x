@@ -4,17 +4,18 @@
   "version": "0.1.13",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "tauri dev",
+    "dev:vite": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:rust": "cd src-tauri && cargo test",
-    "test:all": "npm run test && npm run test:rust",
+    "test:all": "pnpm run test && pnpm run test:rust",
     "icons:build": "./scripts/build-macos-icons.sh",
     "icons:inject": "./scripts/inject-assets-car.sh",
-    "tauri:build": "npm run icons:build && npm run tauri build && npm run icons:inject"
+    "tauri:build": "pnpm run icons:build && pnpm run tauri build && pnpm run icons:inject"
   },
   "dependencies": {
     "@radix-ui/react-context-menu": "^2.2.16",

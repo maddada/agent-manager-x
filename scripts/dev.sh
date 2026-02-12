@@ -13,4 +13,4 @@ sleep 1
 
 echo "=== Building and running ==="
 cd "$PROJECT_ROOT"
-npm run tauri dev
+pnpm run tauri dev
