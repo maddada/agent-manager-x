@@ -20,14 +20,8 @@ echo "Version: $VERSION"
 echo "Project root: $PROJECT_ROOT"
 echo ""
 
-# Check for required credentials
-if [ -z "$APPLE_ID" ] || [ -z "$APPLE_PASSWORD" ] || [ -z "$APPLE_TEAM_ID" ]; then
-    echo "Error: Missing Apple credentials. Please set:"
-    echo "  APPLE_ID - Your Apple ID email"
-    echo "  APPLE_PASSWORD - App-specific password"
-    echo "  APPLE_TEAM_ID - Your Team ID"
-    exit 1
-fi
+# Notarization uses keychain profile (set up via: xcrun notarytool store-credentials "notarytool-profile")
+NOTARY_PROFILE="notarytool-profile"
 
 # Function to build for a specific architecture
 build_arch() {
@@ -96,9 +90,7 @@ notarize_dmg() {
 
     echo "=== Notarizing DMG for $arch ==="
     xcrun notarytool submit "$dmg_path" \
-        --apple-id "$APPLE_ID" \
-        --password "$APPLE_PASSWORD" \
-        --team-id "$APPLE_TEAM_ID" \
+        --keychain-profile "$NOTARY_PROFILE" \
         --wait
 
     echo "=== Stapling notarization ticket for $arch ==="
