@@ -26,6 +26,15 @@ cleanup() {
 }
 trap cleanup EXIT
 
+echo "=== Stop running app (if needed) ==="
+if pkill -f "Agent Manager X" 2>/dev/null; then
+  echo "Waiting for app to quit..."
+  while pgrep -f "Agent Manager X" >/dev/null 2>&1; do
+    sleep 0.5
+  done
+  echo "App stopped."
+fi
+
 echo "=== Build ==="
 cd "$PROJECT_ROOT"
 pnpm run tauri:build
@@ -34,9 +43,6 @@ if [ ! -d "$BUILD_APP" ]; then
   echo "Error: Built app not found at $BUILD_APP"
   exit 1
 fi
-
-echo "=== Stop running app (if needed) ==="
-pkill -x "Agent Manager X" || true
 
 echo "=== Install to /Applications ==="
 rm -rf "$INSTALL_APP"

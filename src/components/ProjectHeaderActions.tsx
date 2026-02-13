@@ -9,7 +9,6 @@ import { Button } from '@/components/ui/button';
 type ProjectHeaderActionsProps = {
   projectName: string;
   projectPath: string;
-  isVisible: boolean;
 };
 
 type ActionMeta = {
@@ -22,7 +21,7 @@ const ACTIONS: ActionMeta[] = [
   { action: 'build', label: 'Build' },
 ];
 
-export function ProjectHeaderActions({ projectName, projectPath, isVisible }: ProjectHeaderActionsProps) {
+export function ProjectHeaderActions({ projectName, projectPath }: ProjectHeaderActionsProps) {
   const [runCommand, setRunCommand] = useState(() => getProjectCommand(projectPath, 'run'));
   const [buildCommand, setBuildCommand] = useState(() => getProjectCommand(projectPath, 'build'));
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -61,15 +60,13 @@ export function ProjectHeaderActions({ projectName, projectPath, isVisible }: Pr
   const executeProjectCommand = async (action: ProjectCommandAction, command: string) => {
     try {
       const terminal = getDefaultTerminal();
-      const terminalCommand = terminal === 'custom' ? getCustomTerminalCommand() : terminal;
-      if (!terminalCommand) {
-        console.error('No custom terminal command configured');
-        return;
-      }
+      const customTerminalCommand = getCustomTerminalCommand();
+      const terminalCommand = terminal === 'custom' ? customTerminalCommand || 'terminal' : terminal;
 
       await invoke('run_project_command', { path: projectPath, command, terminal: terminalCommand });
     } catch (error) {
       console.error(`Failed to execute ${action} command for ${projectPath}:`, error);
+      window.alert(`Failed to execute ${action} command.\n\n${String(error)}`);
     }
   };
 
@@ -106,11 +103,16 @@ export function ProjectHeaderActions({ projectName, projectPath, isVisible }: Pr
   return (
     <>
       <div
-        className={`absolute top-2 right-2 z-20 flex items-center gap-1 transition-opacity ${isVisible ? 'visible opacity-100' : 'invisible opacity-0'}`}
+        className='absolute top-2 right-2 z-50 flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 pointer-events-auto'
       >
         {ACTIONS.map(({ action, label }) => (
           <button
             key={action}
+            type='button'
+            onMouseDown={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+            }}
             onClick={(event) => {
               void handleRunAction(event, action);
             }}

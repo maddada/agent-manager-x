@@ -60,6 +60,31 @@ private struct MiniViewerAction: Encodable {
     let projectName: String
 }
 
+private struct BottomRoundedRectangle: Shape {
+    var radius: CGFloat = 12
+
+    func path(in rect: CGRect) -> Path {
+        let clampedRadius = min(radius, min(rect.width, rect.height) / 2)
+        var path = Path()
+
+        path.move(to: CGPoint(x: rect.minX, y: rect.maxY))
+        path.addLine(to: CGPoint(x: rect.minX, y: rect.minY + clampedRadius))
+        path.addQuadCurve(
+            to: CGPoint(x: rect.minX + clampedRadius, y: rect.minY),
+            control: CGPoint(x: rect.minX, y: rect.minY)
+        )
+        path.addLine(to: CGPoint(x: rect.maxX - clampedRadius, y: rect.minY))
+        path.addQuadCurve(
+            to: CGPoint(x: rect.maxX, y: rect.minY + clampedRadius),
+            control: CGPoint(x: rect.maxX, y: rect.minY)
+        )
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
+        path.closeSubpath()
+
+        return path
+    }
+}
+
 private final class AgentIconProvider {
     private var images: [AgentType: NSImage] = [:]
 
@@ -119,15 +144,18 @@ private final class ViewerModel: ObservableObject {
         collapseTask?.cancel()
 
         if hovering {
-            showDetails = true
+            withAnimation(.easeInOut(duration: 0.16)) {
+                showDetails = true
+            }
             withAnimation(.easeInOut(duration: 0.14)) {
                 isExpanded = true
             }
             return
         }
 
-        // Hide row details instantly on unhover to avoid lingering text during collapse.
-        showDetails = false
+        withAnimation(.easeInOut(duration: 0.12)) {
+            showDetails = false
+        }
 
         let task = DispatchWorkItem { [weak self] in
             guard let self else { return }
@@ -144,36 +172,53 @@ private final class ViewerModel: ObservableObject {
 private struct MiddleClickCatcher: NSViewRepresentable {
     let onMiddleClick: () -> Void
 
-    final class Coordinator: NSObject {
+    final class MiddleClickPassthroughView: NSView {
         var onMiddleClick: () -> Void
 
         init(onMiddleClick: @escaping () -> Void) {
             self.onMiddleClick = onMiddleClick
+            super.init(frame: .zero)
         }
 
-        @objc func handleMiddleClick() {
+        required init?(coder: NSCoder) {
+            return nil
+        }
+
+        override var isOpaque: Bool {
+            false
+        }
+
+        override func hitTest(_ point: NSPoint) -> NSView? {
+            guard let event = window?.currentEvent else {
+                return nil
+            }
+
+            guard event.type == .otherMouseDown || event.type == .otherMouseUp else {
+                return nil
+            }
+
+            return event.buttonNumber == 2 ? self : nil
+        }
+
+        override func otherMouseDown(with event: NSEvent) {
+            guard event.buttonNumber == 2 else {
+                super.otherMouseDown(with: event)
+                return
+            }
+
             onMiddleClick()
         }
     }
 
-    func makeCoordinator() -> Coordinator {
-        Coordinator(onMiddleClick: onMiddleClick)
-    }
-
     func makeNSView(context: Context) -> NSView {
-        let view = NSView(frame: .zero)
-        let recognizer = NSClickGestureRecognizer(
-            target: context.coordinator,
-            action: #selector(Coordinator.handleMiddleClick)
-        )
-        recognizer.numberOfClicksRequired = 1
-        recognizer.buttonMask = 0x4 // Middle mouse button
-        view.addGestureRecognizer(recognizer)
-        return view
+        MiddleClickPassthroughView(onMiddleClick: onMiddleClick)
     }
 
     func updateNSView(_ nsView: NSView, context: Context) {
-        context.coordinator.onMiddleClick = onMiddleClick
+        guard let passthroughView = nsView as? MiddleClickPassthroughView else {
+            return
+        }
+        passthroughView.onMiddleClick = onMiddleClick
     }
 }
 
@@ -185,11 +230,16 @@ private struct SessionRowView: View {
     let agentImage: NSImage?
     let onActivate: () -> Void
     let onMiddleClick: () -> Void
+    let onPopoverVisibilityChanged: (Bool) -> Void
     @State private var isLoadingSpinActive = false
-    @State private var isMessageHovered = false
+    @State private var isRowHovered = false
     @State private var isMessagePopoverHovered = false
     @State private var isMessagePopoverPresented = false
+    @State private var showMessagePopoverTask: DispatchWorkItem?
     @State private var hideMessagePopoverTask: DispatchWorkItem?
+    private let messagePopoverWidth: CGFloat = 320
+    private let messagePopoverHeight: CGFloat = 180
+    private let rowHeight: CGFloat = 56
 
     private var statusLabel: String {
         switch session.status {
@@ -279,10 +329,25 @@ private struct SessionRowView: View {
         isMessagePopoverPresented = true
     }
 
+    private func scheduleMessagePopoverShow() {
+        showMessagePopoverTask?.cancel()
+        guard showDetails, fullMessage != nil else {
+            return
+        }
+
+        let task = DispatchWorkItem {
+            if isRowHovered {
+                showMessagePopover()
+            }
+        }
+        showMessagePopoverTask = task
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0, execute: task)
+    }
+
     private func scheduleMessagePopoverHide() {
         hideMessagePopoverTask?.cancel()
         let task = DispatchWorkItem {
-            if !isMessageHovered && !isMessagePopoverHovered {
+            if !isRowHovered && !isMessagePopoverHovered {
                 isMessagePopoverPresented = false
             }
         }
@@ -346,73 +411,42 @@ private struct SessionRowView: View {
                 .frame(width: 34, height: 34)
                 .opacity(isExpanded ? 1.0 : 0.2)
 
-                if showDetails {
-                    VStack(alignment: .leading, spacing: 3) {
-                        HStack(spacing: 6) {
-                            if showProjectName {
-                                Text(session.projectName)
-                                    .font(.system(size: 12, weight: .semibold))
-                                    .lineLimit(1)
-                            }
-
-                            Text(statusLabel)
-                                .font(.system(size: 10, weight: .medium))
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(baseTint.opacity(0.18), in: Capsule())
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(spacing: 6) {
+                        if showProjectName {
+                            Text(session.projectName)
+                                .font(.system(size: 12, weight: .semibold))
+                                .lineLimit(1)
                         }
 
+                        Text(statusLabel)
+                            .font(.system(size: 10, weight: .medium))
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(baseTint.opacity(0.18), in: Capsule())
+                    }
+
+                    HStack(spacing: 0) {
                         Text(messageLine)
                             .font(.system(size: 10))
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
-                            .onHover { hovering in
-                                guard fullMessage != nil else { return }
-                                isMessageHovered = hovering
-                                if hovering {
-                                    showMessagePopover()
-                                } else {
-                                    scheduleMessagePopoverHide()
-                                }
-                            }
-                            .popover(
-                                isPresented: $isMessagePopoverPresented,
-                                attachmentAnchor: .rect(.bounds),
-                                arrowEdge: .top
-                            ) {
-                                ScrollView(.vertical, showsIndicators: true) {
-                                    Text(fullMessage ?? "")
-                                        .font(.system(size: 13))
-                                        .foregroundStyle(.primary)
-                                        .textSelection(.enabled)
-                                        .frame(maxWidth: .infinity, alignment: .leading)
-                                        .padding(14)
-                                }
-                                .frame(width: 420, height: 220)
-                                .background(.ultraThinMaterial)
-                                .onHover { hovering in
-                                    isMessagePopoverHovered = hovering
-                                    if hovering {
-                                        hideMessagePopoverTask?.cancel()
-                                    } else {
-                                        scheduleMessagePopoverHide()
-                                    }
-                                }
-                            }
-
-                        HStack(spacing: 7) {
-                            Text(lastActivityText)
-                            Text(statLine)
-                            if session.activeSubagentCount > 0 {
-                                Text("+\(session.activeSubagentCount) sub")
-                            }
-                        }
-                        .font(.system(size: 9, weight: .regular, design: .monospaced))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
+                        Spacer(minLength: 0)
                     }
-                    .transition(.opacity.combined(with: .move(edge: .leading)))
+                    .contentShape(Rectangle())
+
+                    HStack(spacing: 7) {
+                        Text(lastActivityText)
+                        Text(statLine)
+                        if session.activeSubagentCount > 0 {
+                            Text("+\(session.activeSubagentCount) sub")
+                        }
+                    }
+                    .font(.system(size: 9, weight: .regular, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
                 }
+                .opacity(showDetails ? 1 : 0)
 
                 Spacer(minLength: 0)
             }
@@ -430,29 +464,74 @@ private struct SessionRowView: View {
         ) : AnyView(EmptyView()))
         .overlay(MiddleClickCatcher(onMiddleClick: onMiddleClick))
         .buttonStyle(.plain)
+        .zIndex(isMessagePopoverPresented ? 200 : 0)
+        .onHover { hovering in
+            isRowHovered = hovering
+            if hovering {
+                scheduleMessagePopoverShow()
+            } else {
+                showMessagePopoverTask?.cancel()
+                scheduleMessagePopoverHide()
+            }
+        }
         .animation(.easeInOut(duration: 0.16), value: isExpanded)
+        .overlay(alignment: .top) {
+            if showDetails, isMessagePopoverPresented, let fullMessage {
+                ScrollView(.vertical, showsIndicators: true) {
+                    Text(fullMessage)
+                        .font(.system(size: 13))
+                        .foregroundStyle(.primary)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(14)
+                }
+                .frame(width: messagePopoverWidth, height: messagePopoverHeight)
+                .background(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(.ultraThinMaterial)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                )
+                .shadow(color: .black.opacity(0.35), radius: 12, x: 0, y: 4)
+                .offset(y: 44)
+                .zIndex(5000)
+                .onHover { hovering in
+                    isMessagePopoverHovered = hovering
+                    if hovering {
+                        hideMessagePopoverTask?.cancel()
+                    } else {
+                        scheduleMessagePopoverHide()
+                    }
+                }
+            }
+        }
         .onChange(of: showDetails) { _, detailsVisible in
             if !detailsVisible {
+                showMessagePopoverTask?.cancel()
                 hideMessagePopoverTask?.cancel()
                 isMessagePopoverPresented = false
-                isMessageHovered = false
+                isRowHovered = false
                 isMessagePopoverHovered = false
             }
+        }
+        .onChange(of: isMessagePopoverPresented) { _, presented in
+            onPopoverVisibilityChanged(presented)
+        }
+        .onDisappear {
+            showMessagePopoverTask?.cancel()
+            hideMessagePopoverTask?.cancel()
+            isMessagePopoverPresented = false
+            isRowHovered = false
+            isMessagePopoverHovered = false
         }
     }
 }
 
 private struct ProjectHeaderView: View {
     let project: MiniViewerProject
-    private let reservedHeaderHeight: CGFloat = 54
-
-    private var displayPath: String {
-        let homePath = NSHomeDirectory()
-        if project.projectPath.hasPrefix(homePath) {
-            return "~" + project.projectPath.dropFirst(homePath.count)
-        }
-        return project.projectPath
-    }
+    private let headerFill = Color(red: 0.11, green: 0.13, blue: 0.16).opacity(0.85)
 
     private var branchName: String? {
         guard let gitBranch = project.gitBranch else {
@@ -468,43 +547,63 @@ private struct ProjectHeaderView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
-            Text(project.projectName)
-                .font(.system(size: 12, weight: .semibold))
-                .lineLimit(1)
+            HStack(spacing: 8) {
+                HStack(spacing: 4) {
+                    Text(project.projectName)
+                        .font(.system(size: 12, weight: .semibold))
+                        .lineLimit(1)
+                        .truncationMode(.tail)
 
-            Text(displayPath)
-                .font(.system(size: 10))
+                    Text("(\(project.sessions.count))")
+                        .font(.system(size: 10, weight: .medium, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+
+                Spacer(minLength: 6)
+
+                HStack(spacing: 7) {
+                    if let branchName {
+                        HStack(spacing: 3) {
+                            Image(systemName: "point.topleft.down.curvedto.point.bottomright.up")
+                                .font(.system(size: 9, weight: .medium))
+                            Text(branchName)
+                        }
+                    }
+
+                    if hasDiffStats {
+                        HStack(spacing: 4) {
+                            Text("+\(project.diffAdditions)")
+                                .foregroundStyle(Color.green.opacity(0.9))
+                            Text("-\(project.diffDeletions)")
+                                .foregroundStyle(Color.red.opacity(0.9))
+                        }
+                    }
+                }
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
+                .font(.system(size: 9, weight: .regular, design: .monospaced))
                 .foregroundStyle(.secondary)
-                .lineLimit(1)
-
-            HStack(spacing: 7) {
-                if let branchName {
-                    HStack(spacing: 3) {
-                        Image(systemName: "point.topleft.down.curvedto.point.bottomright.up")
-                            .font(.system(size: 9, weight: .medium))
-                        Text(branchName)
-                    }
-                }
-
-                if hasDiffStats {
-                    HStack(spacing: 4) {
-                        Text("+\(project.diffAdditions)")
-                            .foregroundStyle(Color.green.opacity(0.9))
-                        Text("-\(project.diffDeletions)")
-                            .foregroundStyle(Color.red.opacity(0.9))
-                    }
-                }
-
-                Text("\(project.sessions.count) \(project.sessions.count == 1 ? "session" : "sessions")")
             }
-            .font(.system(size: 9, weight: .regular, design: .monospaced))
-            .foregroundStyle(.secondary)
-            .lineLimit(1)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 10)
         .padding(.top, 6)
-        .padding(.bottom, 2)
-        .frame(height: reservedHeaderHeight, alignment: .topLeading)
+        .padding(.bottom, 5)
+        .background(
+            BottomRoundedRectangle(radius: 11)
+                .fill(headerFill)
+        )
+        .overlay(
+            BottomRoundedRectangle(radius: 11)
+                .stroke(Color.white.opacity(0.16), lineWidth: 1)
+        )
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(Color.white.opacity(0.08))
+                .frame(height: 1)
+        }
+        .padding(.horizontal, 8)
     }
 }
 
@@ -513,6 +612,7 @@ private struct MiniViewerRootView: View {
     let iconProvider: AgentIconProvider
     let onActivate: (MiniViewerSession) -> Void
     let onMiddleClick: (MiniViewerSession) -> Void
+    @State private var activePopoverSessionID: String?
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
@@ -524,8 +624,12 @@ private struct MiniViewerRootView: View {
                         .padding(.vertical, 12)
                 } else {
                     ForEach(model.projects) { project in
+                        let projectHasActivePopover = activePopoverSessionID != nil
+                            && project.sessions.contains(where: { $0.id == activePopoverSessionID })
                         VStack(alignment: .leading, spacing: 6) {
                             ProjectHeaderView(project: project)
+                                .opacity(model.showDetails ? 1 : 0)
+                                .animation(.easeInOut(duration: 0.16), value: model.showDetails)
 
                             ForEach(project.sessions) { session in
                                 SessionRowView(
@@ -535,11 +639,19 @@ private struct MiniViewerRootView: View {
                                     showProjectName: false,
                                     agentImage: iconProvider.image(for: session.agentType),
                                     onActivate: { onActivate(session) },
-                                    onMiddleClick: { onMiddleClick(session) }
+                                    onMiddleClick: { onMiddleClick(session) },
+                                    onPopoverVisibilityChanged: { presented in
+                                        if presented {
+                                            activePopoverSessionID = session.id
+                                        } else if activePopoverSessionID == session.id {
+                                            activePopoverSessionID = nil
+                                        }
+                                    }
                                 )
                             }
                         }
                         .padding(.bottom, 2)
+                        .zIndex(projectHasActivePopover ? 1000 : 0)
                     }
                 }
             }
@@ -636,11 +748,11 @@ final class MiniViewerAppDelegate: NSObject, NSApplicationDelegate {
         let projectContentHeights = projects.reduce(CGFloat(0)) { partial, project in
             let sessionCount = max(project.sessions.count, 0)
             let rowsHeight = CGFloat(sessionCount) * rowHeight
+            let headerHeight = projectHeaderHeight
+            let itemCount = sessionCount + 1
+            let interItemSpacing = CGFloat(max(itemCount - 1, 0)) * projectStackSpacing
 
-            // Each project VStack uses spacing=6 between header and each session row.
-            let interItemSpacing = CGFloat(sessionCount) * projectStackSpacing
-
-            return partial + projectHeaderHeight + rowsHeight + interItemSpacing + projectBottomPadding
+            return partial + headerHeight + rowsHeight + interItemSpacing + projectBottomPadding
         }
 
         let betweenProjects = CGFloat(max(projects.count - 1, 0)) * rootProjectSpacing
@@ -655,7 +767,13 @@ final class MiniViewerAppDelegate: NSObject, NSApplicationDelegate {
         let width = model.isExpanded ? expandedWidth : collapsedWidth
         let height = desiredHeight(for: model.projects)
         let x = model.side == .left ? screenFrame.minX : screenFrame.maxX - width
-        let y = screenFrame.midY - (height / 2.0)
+        let centeredY = screenFrame.midY - (height / 2.0)
+        let y: CGFloat
+        if height <= screenFrame.height {
+            y = min(max(centeredY, screenFrame.minY), screenFrame.maxY - height)
+        } else {
+            y = screenFrame.minY
+        }
         let frame = NSRect(x: x, y: y, width: width, height: height)
 
         // Avoid NSPanel frame animation jitter near screen edges while hovering quickly.

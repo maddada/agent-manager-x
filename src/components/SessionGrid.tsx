@@ -31,7 +31,6 @@ const masonryBreakpoints = {
 
 export function SessionGrid({ sessions, defaultEditor, onRefresh }: SessionGridProps) {
   const [killingGroups, setKillingGroups] = useState<Set<string>>(new Set());
-  const [hoveredHeaderProjectPath, setHoveredHeaderProjectPath] = useState<string | null>(null);
 
   const handleKillGroup = async (group: ProjectGroup) => {
     setKillingGroups((prev) => new Set(prev).add(group.projectPath));
@@ -94,14 +93,12 @@ export function SessionGrid({ sessions, defaultEditor, onRefresh }: SessionGridP
         return (
           <div
             key={group.projectPath}
-            className={`group/project relative mb-4 rounded-xl border p-3 space-y-3 transition-opacity duration-200 ${group.color} ${killingGroups.has(group.projectPath) ? 'opacity-50' : ''}`}
+            className={`relative mb-4 rounded-xl border p-3 space-y-3 transition-opacity duration-200 ${group.color} ${killingGroups.has(group.projectPath) ? 'opacity-50' : ''}`}
           >
             {/* Project header - always show, clickable */}
             <div
-              className='group/header relative w-full px-1 pb-2 border-b border-white/5 cursor-pointer hover:opacity-80 transition-opacity'
+              className='group relative w-full px-1 pb-2 border-b border-white/5 cursor-pointer hover:opacity-80 transition-opacity'
               onClick={() => handleGroupClick(group)}
-              onMouseEnter={() => setHoveredHeaderProjectPath(group.projectPath)}
-              onMouseLeave={() => setHoveredHeaderProjectPath((prev) => (prev === group.projectPath ? null : prev))}
             >
               {/* Kill group button - top left corner outside, only on header hover */}
               <button
@@ -109,7 +106,7 @@ export function SessionGrid({ sessions, defaultEditor, onRefresh }: SessionGridP
                   event.stopPropagation();
                   handleKillGroup(group);
                 }}
-                className='absolute -top-2 -left-2 w-5 h-5 rounded-full bg-destructive hover:bg-destructive/80 flex items-center justify-center opacity-0 group-hover/header:opacity-100 transition-opacity z-10 shadow-md cursor-pointer'
+                className='absolute -top-2 -left-2 w-5 h-5 rounded-full bg-destructive hover:bg-destructive/80 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10 shadow-md cursor-pointer'
                 title={`Kill all ${group.sessions.length} session${group.sessions.length > 1 ? 's' : ''}`}
               >
                 <svg className='w-3 h-3 text-destructive-foreground' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
@@ -117,11 +114,7 @@ export function SessionGrid({ sessions, defaultEditor, onRefresh }: SessionGridP
                 </svg>
               </button>
 
-              <ProjectHeaderActions
-                projectName={group.projectName}
-                projectPath={group.projectPath}
-                isVisible={hoveredHeaderProjectPath === group.projectPath}
-              />
+              <ProjectHeaderActions projectName={group.projectName} projectPath={group.projectPath} />
 
               <h2 className='text-lg font-semibold text-foreground truncate pr-24'>{group.projectName}</h2>
               <p className='text-sm text-muted-foreground truncate mt-1.5 pr-24'>{truncatePath(group.projectPath)}</p>
@@ -145,7 +138,7 @@ export function SessionGrid({ sessions, defaultEditor, onRefresh }: SessionGridP
                     <span className='text-rose-400'>-{gitDiffStats.deletions}</span>
                   </div>
                 )}
-                <span>
+                <span className='shrink-0 whitespace-nowrap'>
                   {group.sessions.length} {group.sessions.length === 1 ? 'session' : 'sessions'}
                 </span>
               </div>
