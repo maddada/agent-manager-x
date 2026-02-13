@@ -1,6 +1,6 @@
 [package]
 name = "agent-manager-x"
-version = "1.2.0"
+version = "1.2.1"
 description = "Agent Manager X - Monitor and manage AI coding agents"
 authors = ["maddada"]
 edition = "2021"

@@ -827,6 +827,78 @@ fn find_vscode_window_for_project(
 }
 
 #[cfg(target_os = "macos")]
+fn list_vscode_windows_for_pid(pid: i32) -> Vec<WindowMatch> {
+    let options = window::kCGWindowListOptionAll | window::kCGWindowListExcludeDesktopElements;
+    let Some(windows) = window::copy_window_info(options, kCGNullWindowID) else {
+        return Vec::new();
+    };
+
+    let key_window_number = unsafe { CFString::wrap_under_get_rule(window::kCGWindowNumber) };
+    let key_window_pid = unsafe { CFString::wrap_under_get_rule(window::kCGWindowOwnerPID) };
+    let key_window_owner = unsafe { CFString::wrap_under_get_rule(window::kCGWindowOwnerName) };
+    let key_window_name = unsafe { CFString::wrap_under_get_rule(window::kCGWindowName) };
+    let key_window_layer = unsafe { CFString::wrap_under_get_rule(window::kCGWindowLayer) };
+    let key_window_onscreen = unsafe { CFString::wrap_under_get_rule(window::kCGWindowIsOnscreen) };
+
+    let mut seen_ids: HashSet<CGWindowID> = HashSet::new();
+    let mut result = Vec::new();
+
+    for item in windows.iter() {
+        let dict_ref = *item as CFDictionaryRef;
+        if dict_ref.is_null() {
+            continue;
+        }
+        let dict: CFDictionary<CFString, CFType> =
+            unsafe { CFDictionary::wrap_under_get_rule(dict_ref) };
+
+        let owner_name = dict_string(&dict, &key_window_owner).unwrap_or_default();
+        if !is_vscode_owner(&owner_name) {
+            continue;
+        }
+
+        let owner_pid = match dict_i64(&dict, &key_window_pid) {
+            Some(value) if value > 0 => value as i32,
+            _ => continue,
+        };
+        if owner_pid != pid {
+            continue;
+        }
+
+        let layer = dict_i64(&dict, &key_window_layer).unwrap_or(-1);
+        if layer != 0 {
+            continue;
+        }
+
+        let window_id = match dict_i64(&dict, &key_window_number) {
+            Some(value) if value > 0 => value as CGWindowID,
+            _ => continue,
+        };
+        if !seen_ids.insert(window_id) {
+            continue;
+        }
+
+        let is_on_screen = dict_bool(&dict, &key_window_onscreen).unwrap_or(false);
+        let mut title = dict_string(&dict, &key_window_name).unwrap_or_default();
+        if title.trim().is_empty() {
+            if let Some(cgs_title) = cgs_window_title(window_id) {
+                title = cgs_title;
+            }
+        }
+        let title = title.to_ascii_lowercase();
+
+        result.push(WindowMatch {
+            pid,
+            window_id,
+            title,
+            match_kind: "fallback-candidate",
+            is_on_screen,
+        });
+    }
+
+    result
+}
+
+#[cfg(target_os = "macos")]
 fn dockdoor_make_key_window(
     attempt_id: u64,
     post_event_record: SLPSPostEventRecordTo,
@@ -960,15 +1032,37 @@ fn frontmost_window_owner_pid() -> Option<i32> {
     let options =
         window::kCGWindowListOptionOnScreenOnly | window::kCGWindowListExcludeDesktopElements;
     let windows = window::copy_window_info(options, kCGNullWindowID)?;
-    let first = windows.get(0)?;
-    let dict_ref = *first as CFDictionaryRef;
-    if dict_ref.is_null() {
-        return None;
-    }
-    let dict: CFDictionary<CFString, CFType> =
-        unsafe { CFDictionary::wrap_under_get_rule(dict_ref) };
     let key_window_pid = unsafe { CFString::wrap_under_get_rule(window::kCGWindowOwnerPID) };
-    dict_i64(&dict, &key_window_pid).map(|pid| pid as i32)
+    let key_window_owner = unsafe { CFString::wrap_under_get_rule(window::kCGWindowOwnerName) };
+    let self_pid = std::process::id() as i32;
+    let is_amx_owner = |owner_name: &str| {
+        let normalized = owner_name.trim().to_ascii_lowercase();
+        normalized == "agent manager x"
+            || normalized == "agent-manager-x"
+            || normalized.contains("agent manager x")
+    };
+
+    for item in windows.iter() {
+        let dict_ref = *item as CFDictionaryRef;
+        if dict_ref.is_null() {
+            continue;
+        }
+        let dict: CFDictionary<CFString, CFType> =
+            unsafe { CFDictionary::wrap_under_get_rule(dict_ref) };
+        let Some(pid) = dict_i64(&dict, &key_window_pid).map(|value| value as i32) else {
+            continue;
+        };
+        if pid == self_pid {
+            continue;
+        }
+        let owner_name = dict_string(&dict, &key_window_owner).unwrap_or_default();
+        if is_amx_owner(&owner_name) {
+            continue;
+        }
+        return Some(pid);
+    }
+
+    None
 }
 
 #[cfg(target_os = "macos")]
@@ -1084,12 +1178,83 @@ fn dockdoor_focus_window(attempt_id: u64, pid: i32, window_id: CGWindowID) -> Re
 }
 
 #[cfg(target_os = "macos")]
+fn focus_fallback_candidates_for_project(
+    attempt_id: u64,
+    pid: i32,
+    first_window_id: CGWindowID,
+    normalized_project_name: &str,
+) -> Result<bool, String> {
+    let mut candidates = list_vscode_windows_for_pid(pid);
+    if candidates.is_empty() {
+        dockdoor_focus_window(attempt_id, pid, first_window_id)?;
+        return Ok(false);
+    }
+
+    // Keep current chosen fallback first, then probe remaining windows in current z-order.
+    let mut ordered_candidates = Vec::with_capacity(candidates.len() + 1);
+    ordered_candidates.push(WindowMatch {
+        pid,
+        window_id: first_window_id,
+        title: String::new(),
+        match_kind: "fallback-probe-initial",
+        is_on_screen: true,
+    });
+    ordered_candidates.extend(
+        candidates
+            .drain(..)
+            .filter(|candidate| candidate.window_id != first_window_id),
+    );
+
+    // Bound probe duration for large VS Code window sets.
+    let max_candidates = ordered_candidates.len().min(8);
+    for (idx, candidate) in ordered_candidates
+        .into_iter()
+        .take(max_candidates)
+        .enumerate()
+    {
+        dockdoor_focus_window(attempt_id, candidate.pid, candidate.window_id)?;
+        let observed = ax_front_window_hint(candidate.pid);
+        if let Some((front_wid, front_title)) = observed {
+            let matched = project_match_priority(&front_title, normalized_project_name).is_some();
+            log::info!(
+                target: "editor.switch",
+                "[{}] fallback-probe idx={}/{} candidate_wid={} observed_wid={} observed_title='{}' matched_project={}",
+                attempt_id,
+                idx + 1,
+                max_candidates,
+                candidate.window_id,
+                front_wid,
+                shorten_for_log(&front_title, 120),
+                matched
+            );
+            if matched {
+                return Ok(true);
+            }
+        } else {
+            log::warn!(
+                target: "editor.switch",
+                "[{}] fallback-probe idx={}/{} candidate_wid={} observed_front=none",
+                attempt_id,
+                idx + 1,
+                max_candidates,
+                candidate.window_id
+            );
+        }
+    }
+
+    Ok(false)
+}
+
+#[cfg(target_os = "macos")]
 fn open_vscode_session_experimental(
     attempt_id: u64,
     path: &str,
     project_name: Option<&str>,
 ) -> Result<(), String> {
     let start = Instant::now();
+    let normalized_project_name = project_name
+        .map(|name| name.trim().to_ascii_lowercase())
+        .filter(|name| !name.is_empty());
     log::info!(
         target: "editor.switch",
         "[{}] experimental-start path='{}' project_name={:?}",
@@ -1108,7 +1273,30 @@ fn open_vscode_session_experimental(
             window_match.window_id,
             shorten_for_log(&window_match.title, 120)
         );
-        dockdoor_focus_window(attempt_id, window_match.pid, window_match.window_id)?;
+        if window_match.match_kind.starts_with("fallback") {
+            if let Some(project_name) = normalized_project_name.as_ref() {
+                let matched = focus_fallback_candidates_for_project(
+                    attempt_id,
+                    window_match.pid,
+                    window_match.window_id,
+                    project_name,
+                )?;
+                if !matched {
+                    log::warn!(
+                        target: "editor.switch",
+                        "[{}] fallback-probe no-title-match project='{}' initial_wid={} elapsed_ms={}",
+                        attempt_id,
+                        project_name,
+                        window_match.window_id,
+                        start.elapsed().as_millis()
+                    );
+                }
+            } else {
+                dockdoor_focus_window(attempt_id, window_match.pid, window_match.window_id)?;
+            }
+        } else {
+            dockdoor_focus_window(attempt_id, window_match.pid, window_match.window_id)?;
+        }
         log::info!(
             target: "editor.switch",
             "[{}] experimental-complete mode=switch elapsed_ms={}",
