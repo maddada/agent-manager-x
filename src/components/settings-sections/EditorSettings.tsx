@@ -6,15 +6,19 @@ import { type DefaultEditor, EDITOR_OPTIONS } from '@/lib/settings';
 export type EditorSettingsProps = {
   defaultEditor: DefaultEditor;
   customEditorCommand: string;
+  experimentalVsCodeSessionOpening: boolean;
   onEditorChange: (editor: DefaultEditor) => void;
   onCustomEditorCommandChange: (command: string) => void;
+  onExperimentalVsCodeSessionOpeningChange: (enabled: boolean) => void;
 };
 
 export function EditorSettings({
   defaultEditor,
   customEditorCommand,
+  experimentalVsCodeSessionOpening,
   onEditorChange,
   onCustomEditorCommandChange,
+  onExperimentalVsCodeSessionOpeningChange,
 }: EditorSettingsProps) {
   return (
     <div className='space-y-3'>
@@ -41,6 +45,19 @@ export function EditorSettings({
           className='w-full h-9 px-3 text-sm rounded-md border border-border bg-muted/50 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring'
         />
       )}
+      <div className='flex items-center justify-between pt-1'>
+        <div>
+          <div className='text-sm text-foreground'>Expiremental VS Code Session Opening</div>
+          <p className='text-xs text-muted-foreground'>Use a faster macOS app-activation flow for VS Code.</p>
+        </div>
+        <Button
+          variant={experimentalVsCodeSessionOpening ? 'default' : 'outline'}
+          size='sm'
+          onClick={() => onExperimentalVsCodeSessionOpeningChange(!experimentalVsCodeSessionOpening)}
+        >
+          {experimentalVsCodeSessionOpening ? 'On' : 'Off'}
+        </Button>
+      </div>
     </div>
   );
 }

@@ -8,6 +8,8 @@ use std::sync::Mutex;
 struct FileLogger {
     file: Mutex<Option<File>>,
     log_path: PathBuf,
+    switch_file: Mutex<Option<File>>,
+    switch_log_path: PathBuf,
 }
 
 impl FileLogger {
@@ -18,10 +20,18 @@ impl FileLogger {
             .append(true)
             .open(&log_path)
             .ok();
+        let switch_log_path = get_switch_log_path();
+        let switch_file = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&switch_log_path)
+            .ok();
 
         FileLogger {
             file: Mutex::new(file),
             log_path,
+            switch_file: Mutex::new(switch_file),
+            switch_log_path,
         }
     }
 }
@@ -47,6 +57,15 @@ impl log::Log for FileLogger {
                     let _ = file.flush();
                 }
             }
+            // Mirror only editor-switch logs to a dedicated file.
+            if target == "editor.switch" {
+                if let Ok(mut guard) = self.switch_file.lock() {
+                    if let Some(ref mut file) = *guard {
+                        let _ = file.write_all(log_line.as_bytes());
+                        let _ = file.flush();
+                    }
+                }
+            }
 
             // Also print to stderr in dev mode
             #[cfg(debug_assertions)]
@@ -60,18 +79,30 @@ impl log::Log for FileLogger {
                 let _ = file.flush();
             }
         }
+        if let Ok(mut guard) = self.switch_file.lock() {
+            if let Some(ref mut file) = *guard {
+                let _ = file.flush();
+            }
+        }
     }
 }
 
 fn get_log_path() -> PathBuf {
+    let log_dir = get_log_dir();
+    log_dir.join("debug.log")
+}
+
+fn get_switch_log_path() -> PathBuf {
+    let log_dir = get_log_dir();
+    log_dir.join("editor-switch.log")
+}
+
+fn get_log_dir() -> PathBuf {
     let log_dir = dirs::cache_dir()
         .unwrap_or_else(|| PathBuf::from("."))
         .join("agent-manager-x");
-
-    // Create directory if it doesn't exist
     let _ = std::fs::create_dir_all(&log_dir);
-
-    log_dir.join("debug.log")
+    log_dir
 }
 
 static LOGGER: std::sync::OnceLock<FileLogger> = std::sync::OnceLock::new();
@@ -90,13 +121,23 @@ pub fn init() -> Result<(), SetLoggerError> {
     if let Ok(file) = File::create(&logger.log_path) {
         drop(file);
     }
+    if let Ok(file) = File::create(&logger.switch_log_path) {
+        drop(file);
+    }
 
-    // Reinitialize file handle after clearing
+    // Reinitialize file handles after clearing
     if let Ok(mut guard) = logger.file.lock() {
         *guard = OpenOptions::new()
             .create(true)
             .append(true)
             .open(&logger.log_path)
+            .ok();
+    }
+    if let Ok(mut guard) = logger.switch_file.lock() {
+        *guard = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&logger.switch_log_path)
             .ok();
     }
 
@@ -105,6 +146,7 @@ pub fn init() -> Result<(), SetLoggerError> {
 
     log::info!("=== Agent Manager X Debug Log Started ===");
     log::info!("Log file: {:?}", logger.log_path);
+    log::info!("Switch log file: {:?}", logger.switch_log_path);
 
     Ok(())
 }
@@ -122,4 +164,9 @@ fn env_logging_enabled() -> bool {
 /// Get the path to the log file
 pub fn get_log_file_path() -> PathBuf {
     get_log_path()
+}
+
+/// Get the path to the dedicated editor switch log file
+pub fn get_switch_log_file_path() -> PathBuf {
+    get_switch_log_path()
 }

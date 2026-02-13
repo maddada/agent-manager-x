@@ -8,6 +8,7 @@ import {
   getCardClickAction,
   getCustomEditorCommand,
   getCustomTerminalCommand,
+  getExperimentalVsCodeSessionOpening,
 } from '../components/Settings';
 import { getCustomNames, setCustomName, getCustomUrls, setCustomUrl } from '../components/session-card/utils';
 
@@ -115,7 +116,12 @@ export function useSessionCard({ session, defaultEditor, onKill }: UseSessionCar
         console.error('No custom editor command configured');
         return;
       }
-      await invoke('open_in_editor', { path: session.projectPath, editor: editorCommand });
+      await invoke('open_in_editor', {
+        path: session.projectPath,
+        editor: editorCommand,
+        experimentalVsCodeSessionOpening: getExperimentalVsCodeSessionOpening(),
+        projectName: session.projectName,
+      });
     } catch (error) {
       console.error(`Failed to open in ${editor}:`, error);
     }

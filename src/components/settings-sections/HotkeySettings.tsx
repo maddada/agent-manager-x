@@ -4,6 +4,9 @@ import { useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 
 export type HotkeySettingsProps = {
+  title?: string;
+  helperText?: string;
+  emptyText?: string;
   hotkey: string;
   setHotkey: (hotkey: string) => void;
   isRecording: boolean;
@@ -15,6 +18,9 @@ export type HotkeySettingsProps = {
 };
 
 export function HotkeySettings({
+  title = 'Global Hotkey',
+  helperText = 'Click and press your desired key combination',
+  emptyText = 'Click to set hotkey',
   hotkey,
   setHotkey,
   isRecording,
@@ -78,7 +84,7 @@ export function HotkeySettings({
 
   return (
     <div className='space-y-3'>
-      <div className='text-sm font-medium text-foreground'>Global Hotkey</div>
+      <div className='text-sm font-medium text-foreground'>{title}</div>
       <div className='flex gap-2'>
         <div
           className={`flex-1 flex items-center justify-center h-11 rounded-lg border cursor-pointer transition-colors ${
@@ -93,7 +99,7 @@ export function HotkeySettings({
               ? recordedKeys.length > 0
                 ? recordedKeys.join(' + ')
                 : 'Press keys...'
-              : hotkey || 'Click to set hotkey'}
+              : hotkey || emptyText}
           </span>
         </div>
         <Button variant='ghost' size='sm' className='h-11' onClick={onClear}>
@@ -103,7 +109,7 @@ export function HotkeySettings({
           Save
         </Button>
       </div>
-      <p className='text-xs text-muted-foreground'>Click and press your desired key combination</p>
+      <p className='text-xs text-muted-foreground'>{helperText}</p>
     </div>
   );
 }

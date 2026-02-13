@@ -5,19 +5,30 @@ import {
   type DefaultTerminal,
   type CardClickAction,
   type DisplayMode,
+  type MiniViewerSide,
   type ThemeName,
+  STORAGE_KEY,
+  MINI_VIEWER_HOTKEY_STORAGE_KEY,
+  MINI_VIEWER_SIDE_STORAGE_KEY,
+  MINI_VIEWER_SHOW_ON_START_STORAGE_KEY,
   EDITOR_STORAGE_KEY,
   CUSTOM_EDITOR_COMMAND_KEY,
   TERMINAL_STORAGE_KEY,
   CUSTOM_TERMINAL_COMMAND_KEY,
   CLICK_ACTION_STORAGE_KEY,
   DISPLAY_MODE_STORAGE_KEY,
+  EXPERIMENTAL_VS_CODE_SESSION_OPENING_STORAGE_KEY,
   THEME_STORAGE_KEY,
   BACKGROUND_IMAGE_STORAGE_KEY,
   OVERLAY_OPACITY_STORAGE_KEY,
   OVERLAY_COLOR_STORAGE_KEY,
+  DEFAULT_HOTKEY,
+  DEFAULT_MINI_VIEWER_HOTKEY,
+  DEFAULT_MINI_VIEWER_SIDE,
+  DEFAULT_MINI_VIEWER_SHOW_ON_START,
   DEFAULT_EDITOR,
   DEFAULT_DISPLAY_MODE,
+  DEFAULT_EXPERIMENTAL_VS_CODE_SESSION_OPENING,
   DEFAULT_OVERLAY_OPACITY,
   DEFAULT_OVERLAY_COLOR,
   DEFAULT_BACKGROUND_IMAGE,
@@ -27,6 +38,47 @@ import {
   THEME_OPTIONS,
 } from './types';
 import { applyTheme, applyBackgroundImage, applyOverlay } from './theme';
+
+// Hotkey storage
+export function getHotkey(): string {
+  return localStorage.getItem(STORAGE_KEY) || DEFAULT_HOTKEY;
+}
+
+export function setHotkey(hotkey: string) {
+  localStorage.setItem(STORAGE_KEY, hotkey);
+}
+
+export function getMiniViewerHotkey(): string {
+  return localStorage.getItem(MINI_VIEWER_HOTKEY_STORAGE_KEY) || DEFAULT_MINI_VIEWER_HOTKEY;
+}
+
+export function setMiniViewerHotkey(hotkey: string) {
+  localStorage.setItem(MINI_VIEWER_HOTKEY_STORAGE_KEY, hotkey);
+}
+
+export function getMiniViewerSide(): MiniViewerSide {
+  const saved = localStorage.getItem(MINI_VIEWER_SIDE_STORAGE_KEY);
+  if (saved === 'left' || saved === 'right') {
+    return saved;
+  }
+  return DEFAULT_MINI_VIEWER_SIDE;
+}
+
+export function setMiniViewerSide(side: MiniViewerSide) {
+  localStorage.setItem(MINI_VIEWER_SIDE_STORAGE_KEY, side);
+}
+
+export function getMiniViewerShowOnStart(): boolean {
+  const saved = localStorage.getItem(MINI_VIEWER_SHOW_ON_START_STORAGE_KEY);
+  if (saved === null) {
+    return DEFAULT_MINI_VIEWER_SHOW_ON_START;
+  }
+  return saved === 'true';
+}
+
+export function setMiniViewerShowOnStart(enabled: boolean) {
+  localStorage.setItem(MINI_VIEWER_SHOW_ON_START_STORAGE_KEY, String(enabled));
+}
 
 // Editor storage
 export function getDefaultEditor(): DefaultEditor {
@@ -81,6 +133,18 @@ export function getCardClickAction(): CardClickAction {
 
 export function setCardClickAction(action: CardClickAction) {
   localStorage.setItem(CLICK_ACTION_STORAGE_KEY, action);
+}
+
+export function getExperimentalVsCodeSessionOpening(): boolean {
+  const saved = localStorage.getItem(EXPERIMENTAL_VS_CODE_SESSION_OPENING_STORAGE_KEY);
+  if (saved === null) {
+    return DEFAULT_EXPERIMENTAL_VS_CODE_SESSION_OPENING;
+  }
+  return saved === 'true';
+}
+
+export function setExperimentalVsCodeSessionOpening(enabled: boolean) {
+  localStorage.setItem(EXPERIMENTAL_VS_CODE_SESSION_OPENING_STORAGE_KEY, String(enabled));
 }
 
 // Display mode storage

@@ -4,6 +4,7 @@ export type DefaultEditor = 'zed' | 'code' | 'cursor' | 'sublime' | 'neovim' | '
 export type DefaultTerminal = 'ghostty' | 'iterm' | 'kitty' | 'terminal' | 'warp' | 'alacritty' | 'hyper' | 'custom';
 export type CardClickAction = 'editor' | 'terminal';
 export type DisplayMode = 'masonry' | 'list';
+export type MiniViewerSide = 'left' | 'right';
 export type ThemeName =
   | 'default'
   | 'catppuccin'
@@ -37,12 +38,16 @@ export type ThemeOption = {
 
 // Storage keys
 export const STORAGE_KEY = 'agent-manager-x-hotkey';
+export const MINI_VIEWER_HOTKEY_STORAGE_KEY = 'agent-manager-x-mini-viewer-hotkey';
+export const MINI_VIEWER_SIDE_STORAGE_KEY = 'agent-manager-x-mini-viewer-side';
+export const MINI_VIEWER_SHOW_ON_START_STORAGE_KEY = 'agent-manager-x-mini-viewer-show-on-start';
 export const EDITOR_STORAGE_KEY = 'agent-manager-x-default-editor';
 export const CUSTOM_EDITOR_COMMAND_KEY = 'agent-manager-x-custom-editor-command';
 export const TERMINAL_STORAGE_KEY = 'agent-manager-x-default-terminal';
 export const CUSTOM_TERMINAL_COMMAND_KEY = 'agent-manager-x-custom-terminal-command';
 export const CLICK_ACTION_STORAGE_KEY = 'agent-manager-x-click-action';
 export const DISPLAY_MODE_STORAGE_KEY = 'agent-manager-x-display-mode';
+export const EXPERIMENTAL_VS_CODE_SESSION_OPENING_STORAGE_KEY = 'agent-manager-x-expiremental-vs-code-session-opening';
 export const THEME_STORAGE_KEY = 'agent-manager-x-theme';
 export const BACKGROUND_IMAGE_STORAGE_KEY = 'agent-manager-x-background-image';
 export const OVERLAY_OPACITY_STORAGE_KEY = 'agent-manager-x-overlay-opacity';
@@ -50,12 +55,16 @@ export const OVERLAY_COLOR_STORAGE_KEY = 'agent-manager-x-overlay-color';
 
 // Default values
 export const DEFAULT_HOTKEY = 'Command+Control+Shift+Space';
+export const DEFAULT_MINI_VIEWER_HOTKEY = 'Command+Control+Shift+M';
+export const DEFAULT_MINI_VIEWER_SIDE: MiniViewerSide = 'left';
+export const DEFAULT_MINI_VIEWER_SHOW_ON_START = true;
 export const DEFAULT_OVERLAY_OPACITY = 88;
 export const DEFAULT_OVERLAY_COLOR = '#000000';
 export const DEFAULT_BACKGROUND_IMAGE = 'https://images.pexels.com/photos/28428592/pexels-photo-28428592.jpeg';
 export const DEFAULT_THEME: ThemeName = 'ayu';
 export const DEFAULT_EDITOR: DefaultEditor = 'code';
 export const DEFAULT_DISPLAY_MODE: DisplayMode = 'masonry';
+export const DEFAULT_EXPERIMENTAL_VS_CODE_SESSION_OPENING = false;
 
 // Theme options
 export const DARK_THEMES: ThemeOption[] = [

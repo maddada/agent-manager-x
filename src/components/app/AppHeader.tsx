@@ -1,5 +1,6 @@
 // App header component with title, badges, and action buttons
 
+import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -66,16 +67,75 @@ export function AppHeader({
   const hasAgentSessions = AGENT_TYPES.some((t) => agentCounts[t] > 0);
   const showSeparator = (inactiveCount > 0 || staleCount > 0) && hasAgentSessions;
   const backgroundCount = backgroundSessions.length;
+  const [hideTitle, setHideTitle] = useState(false);
+  const leftSectionRef = useRef<HTMLDivElement>(null);
+  const titleMeasureRef = useRef<HTMLSpanElement>(null);
+
+  useEffect(() => {
+    const COLLAPSE_OVERFLOW_PX = 4;
+    const RESTORE_BUFFER_PX = 20;
+
+    const updateTitleVisibility = () => {
+      const leftSectionEl = leftSectionRef.current;
+      const titleMeasureEl = titleMeasureRef.current;
+
+      if (!leftSectionEl || !titleMeasureEl) {
+        return;
+      }
+
+      const overflowPx = leftSectionEl.scrollWidth - leftSectionEl.clientWidth;
+      const gapPx = Number.parseFloat(getComputedStyle(leftSectionEl).columnGap || '0') || 0;
+
+      if (!hideTitle) {
+        if (overflowPx > COLLAPSE_OVERFLOW_PX) {
+          setHideTitle(true);
+        }
+        return;
+      }
+
+      const extraTitleWidthPx = titleMeasureEl.offsetWidth;
+      const visibleChildren = Array.from(leftSectionEl.children) as HTMLElement[];
+      const visibleContentWidthPx = visibleChildren.reduce((sum, child) => sum + child.offsetWidth, 0);
+      const visibleGapWidthPx = Math.max(0, visibleChildren.length - 1) * gapPx;
+      const titleGapWidthPx = visibleChildren.length > 0 ? gapPx : 0;
+      const requiredWidthWithTitlePx =
+        visibleContentWidthPx + visibleGapWidthPx + extraTitleWidthPx + titleGapWidthPx;
+
+      if (leftSectionEl.clientWidth >= requiredWidthWithTitlePx + RESTORE_BUFFER_PX) {
+        setHideTitle(false);
+      }
+    };
+
+    updateTitleVisibility();
+
+    const resizeObserver = new ResizeObserver(updateTitleVisibility);
+    if (leftSectionRef.current) {
+      resizeObserver.observe(leftSectionRef.current);
+    }
+
+    return () => {
+      resizeObserver.disconnect();
+    };
+  }, [hideTitle, waitingCount, totalCount]);
 
   return (
     <header
       data-tauri-drag-region
-      className='h-14 flex items-center justify-between px-6 border-b border-border bg-card/50 backdrop-blur-sm'
+      className='relative h-14 flex items-center justify-between px-6 border-b border-border bg-card/50 backdrop-blur-sm'
     >
-      <div data-tauri-drag-region className='flex items-center gap-4 pl-16'>
-        <h1 data-tauri-drag-region className='text-lg font-semibold text-foreground'>
-          Agent Manager X
-        </h1>
+      <span
+        ref={titleMeasureRef}
+        className='pointer-events-none absolute -z-10 opacity-0 whitespace-nowrap text-lg font-semibold'
+      >
+        Agent Manager X
+      </span>
+
+      <div data-tauri-drag-region ref={leftSectionRef} className='flex min-w-0 flex-1 items-center gap-4 pl-16'>
+        {!hideTitle && (
+          <h1 data-tauri-drag-region className='text-lg font-semibold text-foreground'>
+            Agent Manager X
+          </h1>
+        )}
         {totalCount > 0 && (
           <div data-tauri-drag-region className='flex items-center gap-2'>
             <Badge data-tauri-drag-region variant='secondary' className='font-medium pointer-events-none'>
@@ -92,7 +152,7 @@ export function AppHeader({
           </div>
         )}
       </div>
-      <div className='flex items-center gap-1'>
+      <div className='flex shrink-0 items-center gap-1'>
         {backgroundCount > 0 && (
           <TooltipProvider delayDuration={500}>
             <Tooltip>

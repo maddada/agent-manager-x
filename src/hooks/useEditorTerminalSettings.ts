@@ -1,6 +1,7 @@
 // Editor and terminal settings hook
 
 import { useState, useEffect } from 'react';
+import { invoke } from '@tauri-apps/api/core';
 import {
   type DefaultEditor,
   type DefaultTerminal,
@@ -12,6 +13,8 @@ import {
   setDefaultTerminalSetting,
   getCustomTerminalCommand,
   setCustomTerminalCommand,
+  getExperimentalVsCodeSessionOpening,
+  setExperimentalVsCodeSessionOpening,
 } from '@/lib/settings';
 
 export type UseEditorTerminalSettingsReturn = {
@@ -20,6 +23,8 @@ export type UseEditorTerminalSettingsReturn = {
   customEditorCommand: string;
   handleEditorChange: (editor: DefaultEditor) => void;
   handleCustomEditorCommandChange: (command: string) => void;
+  experimentalVsCodeSessionOpening: boolean;
+  handleExperimentalVsCodeSessionOpeningChange: (enabled: boolean) => void;
 
   // Terminal state
   defaultTerminal: DefaultTerminal;
@@ -31,6 +36,7 @@ export type UseEditorTerminalSettingsReturn = {
 export function useEditorTerminalSettings(): UseEditorTerminalSettingsReturn {
   const [defaultEditor, setDefaultEditorState] = useState<DefaultEditor>('zed');
   const [customEditorCommand, setCustomEditorCommandState] = useState('');
+  const [experimentalVsCodeSessionOpening, setExperimentalVsCodeSessionOpeningState] = useState(false);
   const [defaultTerminal, setDefaultTerminalState] = useState<DefaultTerminal>('terminal');
   const [customTerminalCommand, setCustomTerminalCommandState] = useState('');
 
@@ -38,6 +44,7 @@ export function useEditorTerminalSettings(): UseEditorTerminalSettingsReturn {
   useEffect(() => {
     setDefaultEditorState(getDefaultEditor());
     setCustomEditorCommandState(getCustomEditorCommand());
+    setExperimentalVsCodeSessionOpeningState(getExperimentalVsCodeSessionOpening());
     setDefaultTerminalState(getDefaultTerminal());
     setCustomTerminalCommandState(getCustomTerminalCommand());
   }, []);
@@ -50,6 +57,14 @@ export function useEditorTerminalSettings(): UseEditorTerminalSettingsReturn {
   const handleCustomEditorCommandChange = (command: string) => {
     setCustomEditorCommandState(command);
     setCustomEditorCommand(command);
+  };
+
+  const handleExperimentalVsCodeSessionOpeningChange = (enabled: boolean) => {
+    setExperimentalVsCodeSessionOpeningState(enabled);
+    setExperimentalVsCodeSessionOpening(enabled);
+    invoke('set_mini_viewer_experimental_vscode_session_opening', { enabled }).catch(
+      console.error
+    );
   };
 
   const handleTerminalChange = (terminal: DefaultTerminal) => {
@@ -67,6 +82,8 @@ export function useEditorTerminalSettings(): UseEditorTerminalSettingsReturn {
     customEditorCommand,
     handleEditorChange,
     handleCustomEditorCommandChange,
+    experimentalVsCodeSessionOpening,
+    handleExperimentalVsCodeSessionOpeningChange,
     defaultTerminal,
     customTerminalCommand,
     handleTerminalChange,

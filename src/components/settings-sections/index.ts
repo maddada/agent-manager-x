@@ -6,4 +6,5 @@ export { ClickActionSettings, type ClickActionSettingsProps } from './ClickActio
 export { EditorSettings, type EditorSettingsProps } from './EditorSettings';
 export { TerminalSettings, type TerminalSettingsProps } from './TerminalSettings';
 export { HotkeySettings, type HotkeySettingsProps } from './HotkeySettings';
+export { MiniViewerSettings, type MiniViewerSettingsProps } from './MiniViewerSettings';
 export { NotificationSettings, type NotificationSettingsProps } from './NotificationSettings';

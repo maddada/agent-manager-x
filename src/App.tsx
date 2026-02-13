@@ -1,6 +1,15 @@
 import { useState, useEffect } from 'react';
 import { AppHeader, AppMainContent } from './components/app';
-import { Settings, useHotkeyInit, getDefaultEditor, getDisplayMode, setDisplayMode, type DefaultEditor, type DisplayMode } from './components/Settings';
+import {
+  Settings,
+  useHotkeyInit,
+  useMiniViewerInit,
+  getDefaultEditor,
+  getDisplayMode,
+  setDisplayMode,
+  type DefaultEditor,
+  type DisplayMode,
+} from './components/Settings';
 import { useSessions } from './hooks/useSessions';
 import { useAppInitialization } from './hooks/useAppInitialization';
 import { useNotifications } from './hooks/useNotifications';
@@ -32,6 +41,7 @@ function App() {
 
   // Initialize hotkey on app start
   useHotkeyInit();
+  useMiniViewerInit();
 
   // Initialize theme and background image on app start
   useAppInitialization();

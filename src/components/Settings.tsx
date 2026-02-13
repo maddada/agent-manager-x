@@ -1,7 +1,7 @@
 // Settings dialog component
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { useSettings, useHotkeyInit } from '@/hooks/useSettings';
+import { useSettings, useHotkeyInit, useMiniViewerInit } from '@/hooks/useSettings';
 import {
   ThemeSelector,
   BackgroundSettings,
@@ -9,6 +9,7 @@ import {
   EditorSettings,
   TerminalSettings,
   HotkeySettings,
+  MiniViewerSettings,
   NotificationSettings,
 } from '@/components/settings-sections';
 
@@ -25,6 +26,8 @@ export {
   setCustomEditorCommand,
   getCardClickAction,
   setCardClickAction,
+  getExperimentalVsCodeSessionOpening,
+  setExperimentalVsCodeSessionOpening,
   getDisplayMode,
   setDisplayMode,
   getTheme,
@@ -45,6 +48,7 @@ export {
 } from '@/lib/settings';
 
 export { useHotkeyInit };
+export { useMiniViewerInit };
 
 export type SettingsProps = {
   isOpen: boolean;
@@ -82,8 +86,10 @@ export function Settings({ isOpen, onClose }: SettingsProps) {
           <EditorSettings
             defaultEditor={settings.defaultEditor}
             customEditorCommand={settings.customEditorCommand}
+            experimentalVsCodeSessionOpening={settings.experimentalVsCodeSessionOpening}
             onEditorChange={settings.handleEditorChange}
             onCustomEditorCommandChange={settings.handleCustomEditorCommandChange}
+            onExperimentalVsCodeSessionOpeningChange={settings.handleExperimentalVsCodeSessionOpeningChange}
           />
 
           <TerminalSettings
@@ -102,6 +108,23 @@ export function Settings({ isOpen, onClose }: SettingsProps) {
             setRecordedKeys={settings.setRecordedKeys}
             onSave={settings.handleSave}
             onClear={settings.handleClear}
+          />
+
+          <MiniViewerSettings
+            hotkey={settings.miniViewerHotkey}
+            setHotkey={settings.setMiniViewerHotkeyState}
+            isRecording={settings.miniViewerIsRecording}
+            setIsRecording={settings.setMiniViewerIsRecording}
+            recordedKeys={settings.miniViewerRecordedKeys}
+            setRecordedKeys={settings.setMiniViewerRecordedKeys}
+            onSave={settings.handleMiniViewerSave}
+            onClear={settings.handleMiniViewerClear}
+            side={settings.miniViewerSide}
+            onSideChange={(side) => {
+              settings.handleMiniViewerSideChange(side);
+            }}
+            showOnStart={settings.miniViewerShowOnStart}
+            onShowOnStartChange={settings.handleMiniViewerShowOnStartChange}
           />
 
           <NotificationSettings
@@ -123,6 +146,12 @@ export function Settings({ isOpen, onClose }: SettingsProps) {
           {settings.saved && (
             <div className='p-3 rounded-lg bg-emerald-400/10 border border-emerald-400/20 text-emerald-400 text-sm'>
               Hotkey saved
+            </div>
+          )}
+
+          {settings.miniViewerSaved && (
+            <div className='p-3 rounded-lg bg-emerald-400/10 border border-emerald-400/20 text-emerald-400 text-sm'>
+              Mini viewer hotkey saved
             </div>
           )}
         </div>

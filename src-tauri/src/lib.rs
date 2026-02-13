@@ -19,9 +19,11 @@ use tauri::{
 
 use commands::{
     check_bell_mode, check_notification_system, focus_session, get_all_sessions,
-    install_notification_system, kill_session, open_in_editor, open_in_terminal, register_shortcut,
-    set_bell_mode, uninstall_notification_system, unregister_shortcut, update_tray_title,
-    write_debug_log,
+    get_project_git_diff_stats, install_notification_system, kill_session, open_in_editor,
+    open_in_terminal, register_mini_viewer_shortcut, register_shortcut, run_project_command,
+    set_bell_mode, set_mini_viewer_experimental_vscode_session_opening, set_mini_viewer_side,
+    show_mini_viewer, shutdown_mini_viewer, uninstall_notification_system,
+    unregister_mini_viewer_shortcut, unregister_shortcut, update_tray_title, write_debug_log,
 };
 
 // Store tray icon ID for updates
@@ -39,12 +41,19 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_all_sessions,
             focus_session,
+            get_project_git_diff_stats,
             update_tray_title,
             register_shortcut,
             unregister_shortcut,
+            register_mini_viewer_shortcut,
+            unregister_mini_viewer_shortcut,
+            set_mini_viewer_side,
+            set_mini_viewer_experimental_vscode_session_opening,
+            show_mini_viewer,
             kill_session,
             open_in_editor,
             open_in_terminal,
+            run_project_command,
             write_debug_log,
             check_notification_system,
             install_notification_system,
@@ -121,14 +130,16 @@ pub fn run() {
         })
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
-        .run(|_app, _event| {
+        .run(|_app, _event| match _event {
+            tauri::RunEvent::Exit => {
+                shutdown_mini_viewer();
+            }
             // Handle dock icon click when app is already running (macOS only)
             #[cfg(target_os = "macos")]
-            if let tauri::RunEvent::Reopen {
+            tauri::RunEvent::Reopen {
                 has_visible_windows,
                 ..
-            } = _event
-            {
+            } => {
                 if !has_visible_windows {
                     if let Some(window) = _app.get_webview_window("main") {
                         let _ = window.show();
@@ -136,5 +147,6 @@ pub fn run() {
                     }
                 }
             }
+            _ => {}
         });
 }
