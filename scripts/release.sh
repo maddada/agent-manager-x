@@ -104,7 +104,7 @@ $x64_sha  AgentManagerX_${VERSION}_x64.dmg
 
 ## Install via Homebrew
 \`\`\`bash
-brew install --cask maddada/tap/ai-manager
+brew install --cask maddada/tap/agent-manager-x
 \`\`\`
 "
 
@@ -122,8 +122,8 @@ update_homebrew() {
     cd "$tmp_dir"
     gh repo clone "$HOMEBREW_TAP_REPO" homebrew-tap
 
-    cat > homebrew-tap/Casks/ai-manager.rb << EOF
-cask "ai-manager" do
+    cat > homebrew-tap/Casks/agent-manager-x.rb << EOF
+cask "agent-manager-x" do
   version "$VERSION"
 
   on_arm do
@@ -152,8 +152,8 @@ end
 EOF
 
     cd homebrew-tap
-    git add Casks/ai-manager.rb
-    git commit -m "Add ai-manager cask v$VERSION"
+    git add Casks/agent-manager-x.rb
+    git commit -m "Add agent-manager-x cask v$VERSION"
     git push
 
     cd "$PROJECT_ROOT"
@@ -195,7 +195,7 @@ main() {
         # === Step 1: Build aarch64 (native) ===
         echo "=== Building aarch64 (native) ==="
         cd "$PROJECT_ROOT"
-        pnpm run tauri build
+        pnpm run tauri:build
         echo "Build complete for aarch64"
 
         # Copy the aarch64 bundle to staging
@@ -206,7 +206,7 @@ main() {
         # === Step 2: Build x64 (cross-compile) ===
         echo "=== Building x64 (cross-compile) ==="
         cd "$PROJECT_ROOT"
-        pnpm run tauri build -- --target x86_64-apple-darwin
+        pnpm run tauri:build -- --target x86_64-apple-darwin
         echo "Build complete for x64"
 
         # Create x64 bundle by copying the app template and swapping the binary
@@ -257,7 +257,7 @@ main() {
     echo "=== Release Complete ==="
     echo "Version: $VERSION"
     echo "GitHub: https://github.com/maddada/agent-manager-x/releases/tag/v$VERSION"
-    echo "Homebrew: brew install --cask maddada/tap/ai-manager"
+    echo "Homebrew: brew install --cask maddada/tap/agent-manager-x"
 }
 
 main "$@"

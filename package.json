@@ -1,7 +1,7 @@
 {
   "name": "agent-manager-x",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.1.0",
   "type": "module",
   "scripts": {
     "dev": "tauri dev",
@@ -15,7 +15,11 @@
     "test:all": "pnpm run test && pnpm run test:rust",
     "icons:build": "./scripts/build-macos-icons.sh",
     "icons:inject": "./scripts/inject-assets-car.sh",
-    "tauri:build": "pnpm run icons:build && pnpm run tauri build && pnpm run icons:inject"
+    "tauri:build": "pnpm run icons:build && pnpm run tauri build",
+    "tauri:build:icons": "pnpm run icons:build && pnpm run tauri build && pnpm run icons:inject",
+    "build:install:run": "./scripts/build-install-run.sh",
+    "build:install:run:notarize": "./scripts/build-install-run.sh --notarize",
+    "publish": "./scripts/release.sh"
   },
   "dependencies": {
     "@radix-ui/react-context-menu": "^2.2.16",

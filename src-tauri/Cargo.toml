@@ -1,6 +1,6 @@
 [package]
 name = "agent-manager-x"
-version = "1.0.0"
+version = "1.1.0"
 description = "Agent Manager X - Monitor and manage AI coding agents"
 authors = ["maddada"]
 edition = "2021"
@@ -31,6 +31,9 @@ env_logger = "0.11"
 chrono = "0.4"
 once_cell = "1.19"
 rusqlite = { version = "0.31", features = ["bundled"] }
+core-foundation = "0.10.1"
+core-graphics = "0.24.0"
+libloading = "0.8.9"
 
 [dev-dependencies]
 tempfile = "3"
