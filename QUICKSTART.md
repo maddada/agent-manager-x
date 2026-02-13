@@ -1,3 +1,9 @@
+# Commands
+
+pnpm run build:install:run
+
+/publish <version> to push to brew
+
 # Quick Start Guide
 
 ## Prerequisites
