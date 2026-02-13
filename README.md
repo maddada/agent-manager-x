@@ -21,7 +21,17 @@ Or download the latest DMG from [GitHub Releases](https://github.com/maddada/age
 
 ---
 
-<img width="4281" height="4218" alt="screenshot-with-background-12" src="https://github.com/user-attachments/assets/2787c40e-9c74-41e8-8e37-1396f18f1056" />
+(New!) Mini floating sidebar mode: Sticks to the left/right side of your screen. Hover to see all details. Click to jump to terminal. Always visible. Toggleable with hotkey! <br />
+
+<img width="210" alt="2026-02-13_CleanShot_10-56-07@2x" src="https://github.com/user-attachments/assets/d732bf12-2515-4144-835e-c386ac4c89c4" />
+
+<img width="210" alt="2026-02-13_CleanShot_10-56-02@2x" src="https://github.com/user-attachments/assets/b7e67e18-3c5a-4ef6-b9f8-a3dcaaef7eb3" />
+
+<img width="210" alt="2026-02-13_CleanShot_10-55-56@2x" src="https://github.com/user-attachments/assets/a104a142-d3ac-4e38-8bc5-f4b88d9f455f" />
+
+Full app mode: Can be shown/hidden with a hotkey. Tons of features (Read below)<br />
+
+<img width="2080" height="1770" alt="2026-02-13_Vivaldi Snapshot_10-57-31@2x" src="https://github.com/user-attachments/assets/53b68baf-a99e-411e-8852-a9d0c00ae612" />
 
 ---
 
