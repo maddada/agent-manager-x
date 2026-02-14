@@ -167,3 +167,22 @@ What changed:
 Expected behavior now:
 - Pressing Esc mid-processing transitions Codex sessions back to waiting on the next refresh cycle.
 - If a new task starts after interrupt, session returns to processing normally.
+
+## Follow-up Fix: Claude Interrupt Sticky Processing
+
+Date: 2026-02-14 (same follow-up)
+
+Files:
+- `App/Sources/Services/Session/SessionParsingSupport.swift`
+
+Issue:
+- In Claude sessions, `[Request interrupted by user]` could be parsed as a fresh user task start.
+- Then pending-task promotion in `ClaudeSessionDetector` could incorrectly force status back to `.processing`.
+
+What changed:
+- In `parseClaudeMessageData(...)`, user entries flagged by `isInterruptedRequest(...)` are now treated as terminal events, not new task starts.
+- Added a shared completion marker within the parser pass so interrupts update the task-completed boundary used by pending-task derivation.
+- Assistant visible output and stop/complete system entries now use the same completion marker path.
+
+Expected behavior now:
+- After interrupting Claude mid-run, session status should remain waiting (or age to idle/stale) instead of sticking on processing.

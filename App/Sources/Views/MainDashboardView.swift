@@ -270,6 +270,7 @@ private struct BackgroundSessionsPanel: View {
                             }
                             .buttonStyle(.plain)
                             .focusable(false)
+                            .pointerCursor()
                         }
                         .padding(8)
                         .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.06)))
@@ -284,6 +285,7 @@ private struct BackgroundSessionsPanel: View {
             }
             .buttonStyle(.bordered)
             .focusable(false)
+            .pointerCursor()
         }
     }
 }
@@ -509,7 +511,7 @@ private struct ProjectGroupHeaderView: View {
                 }
                 .buttonStyle(.plain)
                 .focusable(false)
-                .pointerCursor()
+                .hoverPointerCursor()
                 .help("Kill all sessions in project")
                 .opacity(isHoveringHeader ? 1 : 0)
                 .allowsHitTesting(isHoveringHeader)
@@ -564,7 +566,7 @@ private struct ProjectGroupHeaderView: View {
                 }
                 .buttonStyle(.plain)
                 .focusable(false)
-                .pointerCursor()
+                .hoverPointerCursor()
                 .help("Open project")
                 .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
                 .layoutPriority(0)
@@ -594,7 +596,7 @@ private struct ProjectGroupHeaderView: View {
             Button("Terminal", action: onOpenInTerminal)
                 .buttonStyle(.bordered)
                 .focusable(false)
-                .pointerCursor()
+                .hoverPointerCursor()
                 .controlSize(.small)
 
             ForEach(ProjectCommandAction.allCases, id: \.rawValue) { action in
@@ -622,7 +624,7 @@ private struct ProjectQuickActionButton: View {
         }
         .buttonStyle(.bordered)
         .focusable(false)
-        .pointerCursor()
+        .hoverPointerCursor()
         .controlSize(.small)
         .contextMenu {
             Button("Edit Command") {
@@ -835,8 +837,8 @@ private struct SessionCardView: View {
             }
 
         }
+        .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
-        .pointerCursor()
         .onHover { hovering in
             isHoveringCard = hovering
         }
@@ -903,6 +905,7 @@ private struct SessionCardView: View {
         .onChange(of: isMessagePopoverPresented) { _, presented in
             onMessagePopoverVisibilityChanged(presented)
         }
+        .pointerCursor()
         .contextMenu {
             Button("Open in Editor") {
                 store.openSessionInEditor(session)
@@ -1042,42 +1045,80 @@ private struct AgentMarkerView: View {
     }
 }
 
-private extension View {
+extension View {
     func pointerCursor() -> some View {
-        modifier(PointingHandCursorModifier())
+        modifier(PointerCursorModifier())
     }
 
     func onMiddleClick(perform action: @escaping () -> Void) -> some View {
         overlay(MiddleClickListener(onMiddleClick: action))
     }
+
+    func hoverPointerCursor() -> some View {
+        modifier(HoverPointerCursorModifier())
+    }
 }
 
-private struct PointingHandCursorModifier: ViewModifier {
-    @State private var cursorPushed = false
+private struct PointerCursorModifier: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .overlay(
+                PointerCursorRegion()
+                    .allowsHitTesting(false)
+            )
+    }
+}
+
+private struct PointerCursorRegion: NSViewRepresentable {
+    func makeNSView(context: Context) -> PointerCursorNSView {
+        PointerCursorNSView()
+    }
+
+    func updateNSView(_ nsView: PointerCursorNSView, context: Context) {
+        nsView.window?.invalidateCursorRects(for: nsView)
+    }
+}
+
+private final class PointerCursorNSView: NSView {
+    override var isOpaque: Bool {
+        false
+    }
+
+    override func resetCursorRects() {
+        super.resetCursorRects()
+        discardCursorRects()
+        addCursorRect(bounds, cursor: .pointingHand)
+    }
+
+    override func setFrameSize(_ newSize: NSSize) {
+        super.setFrameSize(newSize)
+        window?.invalidateCursorRects(for: self)
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        window?.invalidateCursorRects(for: self)
+    }
+}
+
+private struct HoverPointerCursorModifier: ViewModifier {
+    @State private var isHovering = false
 
     func body(content: Content) -> some View {
         content
             .onHover { hovering in
                 if hovering {
-                    guard !cursorPushed else {
-                        return
-                    }
-                    NSCursor.pointingHand.push()
-                    cursorPushed = true
+                    NSCursor.pointingHand.set()
                 } else {
-                    guard cursorPushed else {
-                        return
-                    }
-                    NSCursor.pop()
-                    cursorPushed = false
+                    NSCursor.arrow.set()
                 }
+                isHovering = hovering
             }
             .onDisappear {
-                guard cursorPushed else {
-                    return
+                if isHovering {
+                    NSCursor.arrow.set()
+                    isHovering = false
                 }
-                NSCursor.pop()
-                cursorPushed = false
             }
     }
 }
@@ -1293,14 +1334,17 @@ private struct RenameDialog: View {
             HStack {
                 Button("Cancel", action: onCancel)
                     .focusable(false)
+                    .pointerCursor()
                 if hasCustomValue {
                     Button("Reset", role: .destructive, action: onReset)
                         .focusable(false)
+                        .pointerCursor()
                 }
                 Spacer()
                 Button("Save", action: onSave)
                     .keyboardShortcut(.defaultAction)
                     .focusable(false)
+                    .pointerCursor()
             }
         }
         .padding(18)
@@ -1327,14 +1371,17 @@ private struct URLDialog: View {
             HStack {
                 Button("Cancel", action: onCancel)
                     .focusable(false)
+                    .pointerCursor()
                 if hasCustomValue {
                     Button("Clear", role: .destructive, action: onClear)
                         .focusable(false)
+                        .pointerCursor()
                 }
                 Spacer()
                 Button("Save", action: onSave)
                     .keyboardShortcut(.defaultAction)
                     .focusable(false)
+                    .pointerCursor()
             }
         }
         .padding(18)
@@ -1373,10 +1420,12 @@ private struct ProjectCommandDialog: View {
             HStack {
                 Button("Cancel", action: onCancel)
                     .focusable(false)
+                    .pointerCursor()
                 Spacer()
                 Button(runAfterSave ? "Save and Run" : "Save", action: onSave)
                     .keyboardShortcut(.defaultAction)
                     .focusable(false)
+                    .pointerCursor()
             }
         }
         .padding(18)

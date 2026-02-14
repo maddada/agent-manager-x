@@ -304,6 +304,32 @@ private extension View {
     ) -> some View {
         modifier(MiniViewerScaledFontModifier(size: size, weight: weight, design: design))
     }
+
+    func miniViewerPointerCursor() -> some View {
+        modifier(MiniViewerPointerCursorModifier())
+    }
+}
+
+private struct MiniViewerPointerCursorModifier: ViewModifier {
+    @State private var isHovering = false
+
+    func body(content: Content) -> some View {
+        content
+            .onHover { hovering in
+                if hovering {
+                    NSCursor.pointingHand.set()
+                } else {
+                    NSCursor.arrow.set()
+                }
+                isHovering = hovering
+            }
+            .onDisappear {
+                if isHovering {
+                    NSCursor.arrow.set()
+                    isHovering = false
+                }
+            }
+    }
 }
 
 private struct SessionRowView: View {
@@ -594,6 +620,7 @@ private struct SessionRowView: View {
         .overlay(MiddleClickCatcher(onMiddleClick: onMiddleClick))
         .buttonStyle(.plain)
         .focusable(false)
+        .miniViewerPointerCursor()
         .zIndex(isMessagePopoverPresented ? 200 : 0)
         .onHover { hovering in
             isRowHovered = hovering

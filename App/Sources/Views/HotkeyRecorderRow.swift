@@ -28,6 +28,7 @@ struct HotkeyRecorderRow: View {
                 }
                 .buttonStyle(.bordered)
                 .focusable(false)
+                .pointerCursor()
 
                 Button("Clear") {
                     stopRecording()
@@ -36,6 +37,7 @@ struct HotkeyRecorderRow: View {
                 }
                 .buttonStyle(.bordered)
                 .focusable(false)
+                .pointerCursor()
 
                 Button("Save") {
                     stopRecording()
@@ -43,6 +45,7 @@ struct HotkeyRecorderRow: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .focusable(false)
+                .pointerCursor()
             }
 
             Text(helperText)

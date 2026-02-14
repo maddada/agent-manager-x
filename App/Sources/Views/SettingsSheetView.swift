@@ -18,6 +18,7 @@ struct SettingsSheetView: View {
                 }
                 .keyboardShortcut(.cancelAction)
                 .focusable(false)
+                .pointerCursor()
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
@@ -90,6 +91,7 @@ struct SettingsSheetView: View {
                     }
                     .buttonStyle(.bordered)
                     .focusable(false)
+                    .pointerCursor()
                 }
             }
 
@@ -251,12 +253,14 @@ struct SettingsSheetView: View {
                     }
                     .buttonStyle(.bordered)
                     .focusable(false)
+                    .pointerCursor()
                 } else {
                     Button("Install") {
                         store.installNotifications()
                     }
                     .buttonStyle(.borderedProminent)
                     .focusable(false)
+                    .pointerCursor()
                 }
 
                 if store.notificationState.installState == .installed {
@@ -265,6 +269,7 @@ struct SettingsSheetView: View {
                     }
                     .buttonStyle(.bordered)
                     .focusable(false)
+                    .pointerCursor()
                 }
             }
             .disabled(store.notificationState.isLoading)

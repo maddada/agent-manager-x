@@ -384,11 +384,22 @@ enum SessionParsingSupport {
                 lastTaskSignalTimestamp = timestamp
             }
 
+            func markCompletion() {
+                guard let timestampDate else { return }
+                lastTaskCompletedAt = max(lastTaskCompletedAt ?? .distantPast, timestampDate)
+            }
+
             switch type {
             case "user":
                 if let messageBody = entry["message"] as? [String: Any],
                    let content = messageBody["content"] {
                     if isLocalClaudeCommand(content: content) {
+                        continue
+                    }
+
+                    // An explicit interrupted marker means the prior active task was canceled.
+                    if isInterruptedRequest(content: content) {
+                        markCompletion()
                         continue
                     }
 
@@ -414,8 +425,8 @@ enum SessionParsingSupport {
                     if let text = extractText(from: content),
                        !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
                        !shouldSuppressPreviewMessage(text),
-                       let timestampDate {
-                        lastTaskCompletedAt = timestampDate
+                       timestampDate != nil {
+                        markCompletion()
                     }
                 }
             case "progress":
@@ -423,8 +434,8 @@ enum SessionParsingSupport {
             case "system":
                 if let subtype = (entry["subtype"] as? String)?.lowercased(),
                    (subtype.contains("stop") || subtype.contains("complete")),
-                   let timestampDate {
-                    lastTaskCompletedAt = timestampDate
+                   timestampDate != nil {
+                    markCompletion()
                 }
             default:
                 continue
