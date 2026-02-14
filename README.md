@@ -44,25 +44,25 @@ Can be shown/hidden with a hotkey. Tons of features (Read below)<br />
 Full video showing the best agentic workflow I found for easily managing 10+ agents
 https://youtube.com/watch?v=5LRAKaYJXjw
 
-## Features vs [original repo](https://github.com/ozankasikci/agent-sessions)
-(huge credit for the idea, I just took it and made it better, keeping the same license)
+## Features
 
-- Better reliability when it comes to showing current progress
+- View all active coding agent sessions in one place
+- Real-time status detection (Thinking, Processing, Waiting, Idle)
+- Global hotkey to toggle visibility (default: `Ctrl+Space`, configurable, I personally use ctrl+shift+cmd+s)
+- Mini floating display mode that shows spinning indicator for all running sessions and yellow sign for ones that recently finished so you can jump back to them!
+- Configurable run, build, commit, push, buttons for each project.
+- Reliably shows current progress and status of all sessions.
+- Shows cpu and ram consumption of all sessions and lets you code all stale sessions with 1 click to save ram.
 - Improved UX in a bunch of areas like grouping sessions per project
-- Added audio notifications (Summary Text to Speech and Bell modes)
-- Implpemented Codex CLI support
-- Fix lots of bugs
-- Added theming
-- Add support for tons of editors
-- Added ability to click on a session to jump to it
+- Added audio notifications for Codex and Claude Code (Summary Text to Speech and Bell modes)
+- Claude Code, OpenCode, and Codex CLI support
+- Lot of editors and terminals supported.
+- Added ability to click on a session to instantly jump to it.
 - Remember last location and size
 - Default Editor and Default Terminal Support
 - Themes and background image support
-- Cleaned up codebase a bunch
-- Added close buttons for a project's sessions, for all from specific agent, for all stale sessions, etc.
-- Added fading and sorting based on the last activity on each session (5 mins = idle, 10 minutes = stale)
-- Coming soon: auto closing for stale sessions to save ram
-- Coming soon: stale / idle timing setting
+- Close buttons for a project's sessions, for all from specific agent, for all stale sessions, etc.
+- Added fading and sorting based on the last activity on each session (5 mins = idle, 10 minutes = stale) 
 
 Please ask or do a PR if you have any feature ideas!
 
@@ -72,11 +72,3 @@ Please ask or do a PR if you have any feature ideas!
 - **OpenCode** - Open-source AI coding assistant
 - **Codex** - OpenAI's coding agent CLI
 
-## Features
-
-- View all active coding agent sessions in one place
-- Real-time status detection (Thinking, Processing, Waiting, Idle)
-- Global hotkey to toggle visibility (default: `Ctrl+Space`, configurable, I personally use ctrl+shift+cmd+space)
-- Click to focus on a specific session's terminal
-- Custom session names (rename by right clicking on a session)
-- Quick access URL for each session (e.g., dev server links)
