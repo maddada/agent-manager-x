@@ -4,17 +4,19 @@ A macOS desktop app to monitor your Claude Code, Codex, OpenCode AI coding agent
 
 Shows RAM and CPU usage for every running session and lets you code Stale or Idle chats that are wasting memory with 1 click!
 
-Project inspired by [@ozankasikci](https://github.com/ozankasikci) but his version is made in Tauri & react and has a different feature set now.
+This project is built as a native macOS app with Swift and SwiftUI (not Tauri/React).
+
+Project inspired by [@ozankasikci](https://github.com/ozankasikci), whose app is built with Tauri + React and now has a different feature set.
 
 Please star his repo here: https://github.com/ozankasikci/agent-sessions.
 
 ## Installation
 
 ```bash
-brew install --cask maddada/tap/agent-manager-x
+brew install --cask maddada/tap/agent-manager-x-swift
 ```
 
-Or download the latest DMG from [GitHub Releases](https://github.com/maddada/agent-manager-x/releases).
+Or download the latest DMG from [GitHub Releases](https://github.com/maddada/agent-manager-x-swift/releases).
 
 ---
 
