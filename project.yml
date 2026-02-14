@@ -20,12 +20,12 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.madda.agentmanagerx
-        PRODUCT_NAME: AgentManagerX
+        PRODUCT_NAME: "Agent Manager X"
         GENERATE_INFOPLIST_FILE: YES
-        INFOPLIST_KEY_CFBundleDisplayName: AgentManagerX
+        INFOPLIST_KEY_CFBundleDisplayName: "Agent Manager X"
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.productivity
         INFOPLIST_KEY_NSHumanReadableCopyright: "Copyright (c) 2026"
-        MARKETING_VERSION: 0.1.0
+        MARKETING_VERSION: 1.0
         CURRENT_PROJECT_VERSION: 1
 schemes:
   AgentManagerX:

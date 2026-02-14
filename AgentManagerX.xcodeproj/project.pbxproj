@@ -12,6 +12,7 @@
 		0FF4940CE897EA0624C0B6E2 /* claude.svg in Resources */ = {isa = PBXBuildFile; fileRef = 95001ABDB1ACAF2BB88380B2 /* claude.svg */; };
 		19A3DA0384E8B7ECDA3D17BD /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 404FC657905671AECC6965B6 /* Assets.xcassets */; };
 		224167A030F48C4B9D903BEA /* WindowAccessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8940C11EC55B0A758E49545A /* WindowAccessor.swift */; };
+		256D895950F4F309F16169A3 /* MainAppScrollbarStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = EEEDC67A6896661A05C16C74 /* MainAppScrollbarStyle.swift */; };
 		2F58695C4FB769B2ABCFAB73 /* SessionParsingSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB103DFEB8E3F9CA34DA7772 /* SessionParsingSupport.swift */; };
 		30467B6657960FC57FD21330 /* SettingsKeys.swift in Sources */ = {isa = PBXBuildFile; fileRef = 59FCA15FAE0CABFC8AE10A4F /* SettingsKeys.swift */; };
 		31256E7C2345770C91B4E145 /* SettingsSheetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04FDFF820A552294F4BC0152 /* SettingsSheetView.swift */; };
@@ -32,7 +33,6 @@
 		AC79B4C3924B1A367668FA87 /* SessionModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54C2C9BF3CC8E47F3478750E /* SessionModels.swift */; };
 		AD73EA21EFD8DE9F13293E3C /* OpenCodeSessionDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7970EAE7DDC8CE07565E2B83 /* OpenCodeSessionDetector.swift */; };
 		AED74C14C77E0E1F6CC500EC /* CodexSessionDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F938A7A72744F24EA61DE1D /* CodexSessionDetector.swift */; };
-		A1F43A51FAAB09D8A6122E4B /* MainAppScrollbarStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D2454F57B41A0135C6D592A /* MainAppScrollbarStyle.swift */; };
 		B6AB8B7C5CCD747942CB25CD /* MainDashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C0224C1D980A75CB7CAA4C9 /* MainDashboardView.swift */; };
 		B84AAE2129FB7806B3E52C94 /* MiniViewerController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5CA8D7D7AC9DA1290111DB8 /* MiniViewerController.swift */; };
 		C14755A6E90AA6BCE9843E0E /* GitDiffStatsService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A183D82F684C643DFC8054AD /* GitDiffStatsService.swift */; };
@@ -46,7 +46,6 @@
 		010B5B063E8F3E054D407863 /* ProcessIntrospectionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProcessIntrospectionService.swift; sourceTree = "<group>"; };
 		04FDFF820A552294F4BC0152 /* SettingsSheetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsSheetView.swift; sourceTree = "<group>"; };
 		1C0224C1D980A75CB7CAA4C9 /* MainDashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainDashboardView.swift; sourceTree = "<group>"; };
-		2D2454F57B41A0135C6D592A /* MainAppScrollbarStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainAppScrollbarStyle.swift; sourceTree = "<group>"; };
 		2C764FA265B7F1796378B788 /* CoreActionsService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreActionsService.swift; sourceTree = "<group>"; };
 		2C7AAC70D7DFACC13210406D /* ClaudeSessionDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeSessionDetector.swift; sourceTree = "<group>"; };
 		404FC657905671AECC6965B6 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -73,6 +72,7 @@
 		B712DDEB35E1DA4E9D87B29A /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		CE50A2328B0421D7A456EC5E /* ShellCommandRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShellCommandRunner.swift; sourceTree = "<group>"; };
 		E2E961DD3DC217815A4714F1 /* NotificationModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationModels.swift; sourceTree = "<group>"; };
+		EEEDC67A6896661A05C16C74 /* MainAppScrollbarStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainAppScrollbarStyle.swift; sourceTree = "<group>"; };
 		F6ABDEF71C97B760272783D9 /* tray-icon.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "tray-icon.png"; sourceTree = "<group>"; };
 		FB103DFEB8E3F9CA34DA7772 /* SessionParsingSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionParsingSupport.swift; sourceTree = "<group>"; };
 		FBD04C4B33F52DBEE0E38E06 /* SettingsTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsTypes.swift; sourceTree = "<group>"; };
@@ -95,7 +95,7 @@
 			isa = PBXGroup;
 			children = (
 				6C697E35A6A1C9B11DBABAC2 /* HotkeyRecorderRow.swift */,
-				2D2454F57B41A0135C6D592A /* MainAppScrollbarStyle.swift */,
+				EEEDC67A6896661A05C16C74 /* MainAppScrollbarStyle.swift */,
 				1C0224C1D980A75CB7CAA4C9 /* MainDashboardView.swift */,
 				04FDFF820A552294F4BC0152 /* SettingsSheetView.swift */,
 				8940C11EC55B0A758E49545A /* WindowAccessor.swift */,
@@ -359,7 +359,7 @@
 				C14755A6E90AA6BCE9843E0E /* GitDiffStatsService.swift in Sources */,
 				7C15B41ACF75BAA206D0C546 /* GlobalHotkeyManager.swift in Sources */,
 				49B653A6F852E83C207F5735 /* HotkeyRecorderRow.swift in Sources */,
-				A1F43A51FAAB09D8A6122E4B /* MainAppScrollbarStyle.swift in Sources */,
+				256D895950F4F309F16169A3 /* MainAppScrollbarStyle.swift in Sources */,
 				B6AB8B7C5CCD747942CB25CD /* MainDashboardView.swift in Sources */,
 				E93C49A7AA13380E68C8AB06 /* MenuBarService.swift in Sources */,
 				B84AAE2129FB7806B3E52C94 /* MiniViewerController.swift in Sources */,
@@ -453,16 +453,16 @@
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = AgentManagerX;
+				INFOPLIST_KEY_CFBundleDisplayName = "Agent Manager X";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright (c) 2026";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 0.1.0;
+				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.madda.agentmanagerx;
-				PRODUCT_NAME = AgentManagerX;
+				PRODUCT_NAME = "Agent Manager X";
 				SDKROOT = macosx;
 			};
 			name = Release;
@@ -530,16 +530,16 @@
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = AgentManagerX;
+				INFOPLIST_KEY_CFBundleDisplayName = "Agent Manager X";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright (c) 2026";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 0.1.0;
+				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.madda.agentmanagerx;
-				PRODUCT_NAME = AgentManagerX;
+				PRODUCT_NAME = "Agent Manager X";
 				SDKROOT = macosx;
 			};
 			name = Debug;
