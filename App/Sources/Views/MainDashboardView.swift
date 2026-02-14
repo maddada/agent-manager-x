@@ -1008,8 +1008,42 @@ private struct AgentMarkerView: View {
 }
 
 private extension View {
+    func pointerCursor() -> some View {
+        modifier(PointingHandCursorModifier())
+    }
+
     func onMiddleClick(perform action: @escaping () -> Void) -> some View {
         overlay(MiddleClickListener(onMiddleClick: action))
+    }
+}
+
+private struct PointingHandCursorModifier: ViewModifier {
+    @State private var cursorPushed = false
+
+    func body(content: Content) -> some View {
+        content
+            .onHover { hovering in
+                if hovering {
+                    guard !cursorPushed else {
+                        return
+                    }
+                    NSCursor.pointingHand.push()
+                    cursorPushed = true
+                } else {
+                    guard cursorPushed else {
+                        return
+                    }
+                    NSCursor.pop()
+                    cursorPushed = false
+                }
+            }
+            .onDisappear {
+                guard cursorPushed else {
+                    return
+                }
+                NSCursor.pop()
+                cursorPushed = false
+            }
     }
 }
 

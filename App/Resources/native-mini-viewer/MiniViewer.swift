@@ -88,6 +88,11 @@ private struct MiniViewerPayload: Codable {
     let projects: [MiniViewerProject]
 }
 
+private struct MiniViewerVisibilityCommand: Codable {
+    let command: String
+    let isVisible: Bool
+}
+
 private struct MiniViewerAction: Encodable {
     let action: String
     let pid: UInt32
@@ -308,6 +313,7 @@ private struct SessionRowView: View {
     let isExpanded: Bool
     let showDetails: Bool
     let showProjectName: Bool
+    let showPopoverAbove: Bool
     let agentImage: NSImage?
     let onActivate: () -> Void
     let onMiddleClick: () -> Void
@@ -325,6 +331,13 @@ private struct SessionRowView: View {
 
     private var messagePopoverHeight: CGFloat {
         180 * chromeScale
+    }
+
+    private var popoverYOffset: CGFloat {
+        if showPopoverAbove {
+            return -(messagePopoverHeight + (10 * chromeScale))
+        }
+        return 44 * chromeScale
     }
 
     private var rowHeight: CGFloat {
@@ -594,12 +607,7 @@ private struct SessionRowView: View {
                     RoundedRectangle(cornerRadius: 12 * chromeScale, style: .continuous)
                         .fill(.ultraThinMaterial)
                 )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12 * chromeScale, style: .continuous)
-                        .stroke(Color.white.opacity(0.12), lineWidth: 1)
-                )
-                .shadow(color: .black.opacity(0.35), radius: 12 * chromeScale, x: 0, y: 4 * chromeScale)
-                .offset(y: 44 * chromeScale)
+                .offset(y: popoverYOffset)
                 .zIndex(5000)
                 .onHover { hovering in
                     isMessagePopoverHovered = hovering
@@ -724,6 +732,10 @@ private struct MiniViewerRootView: View {
         model.uiElementSize.chromeScale
     }
 
+    private var popoverAboveSessionIDs: Set<String> {
+        Set(model.projects.flatMap(\.sessions).suffix(2).map(\.id))
+    }
+
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(spacing: 8 * chromeScale) {
@@ -741,6 +753,7 @@ private struct MiniViewerRootView: View {
                                 isExpanded: model.isExpanded,
                                 showDetails: model.showDetails,
                                 showProjectName: false,
+                                showPopoverAbove: popoverAboveSessionIDs.contains(session.id),
                                 agentImage: iconProvider.image(for: session.agentType),
                                 onActivate: { onActivate(session) },
                                 onMiddleClick: { onMiddleClick(session) },
@@ -794,7 +807,7 @@ final class MiniViewerAppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
-        true
+        false
     }
 
     private func createWindow() {
@@ -837,8 +850,9 @@ final class MiniViewerAppDelegate: NSObject, NSApplicationDelegate {
 
     private func bindModel() {
         Publishers.CombineLatest4(model.$side, model.$isExpanded, model.$projects, model.$uiElementSize)
+            .combineLatest(model.$isVisible)
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] _, _, _, _ in
+            .sink { [weak self] _, _ in
                 self?.updateWindowFrame(animated: true)
             }
             .store(in: &cancellables)
@@ -915,6 +929,14 @@ final class MiniViewerAppDelegate: NSObject, NSApplicationDelegate {
                 buffer.removeSubrange(0...newlineRange.lowerBound)
 
                 guard !lineData.isEmpty else {
+                    continue
+                }
+
+                if let visibility = try? decoder.decode(MiniViewerVisibilityCommand.self, from: lineData),
+                   visibility.command == "setVisibility" {
+                    DispatchQueue.main.async {
+                        self?.model.isVisible = visibility.isVisible
+                    }
                     continue
                 }
 

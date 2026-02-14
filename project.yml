@@ -13,8 +13,10 @@ targets:
     platform: macOS
     sources:
       - path: App/Sources
-    resources:
       - path: App/Resources
+        buildPhase: resources
+        excludes:
+          - native-mini-viewer/MiniViewer.swift
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.madda.agentmanagerx

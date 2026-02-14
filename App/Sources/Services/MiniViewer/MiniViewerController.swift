@@ -32,7 +32,8 @@ final class MiniViewerController {
     private let settings: SettingsStore
     private let fileManager: FileManager
 
-    private let queue = DispatchQueue(label: "MiniViewerController.queue")
+    private let queue = DispatchQueue(label: "MiniViewerController.queue", qos: .userInteractive)
+    private let payloadQueue = DispatchQueue(label: "MiniViewerController.payloadQueue", qos: .utility)
 
     private var side: MiniViewerSide
     private var uiElementSize: UIElementSize
@@ -44,6 +45,9 @@ final class MiniViewerController {
     private var stdoutHandle: FileHandle?
     private var stdoutBuffer = Data()
     private var updaterTimer: DispatchSourceTimer?
+    private var payloadRefreshInFlight = false
+    private var payloadRefreshPending = false
+    private var payloadRefreshGeneration: UInt64 = 0
 
     private var diffCache: [String: CachedGitDiffStats] = [:]
 
@@ -71,7 +75,7 @@ final class MiniViewerController {
         queue.async {
             self.side = side
             self.settings.miniViewerSide = side
-            self.sendPayloadLocked()
+            self.requestPayloadRefreshLocked()
         }
     }
 
@@ -79,7 +83,7 @@ final class MiniViewerController {
         queue.async {
             self.uiElementSize = value
             self.settings.miniViewerUIElementSize = value
-            self.sendPayloadLocked()
+            self.requestPayloadRefreshLocked()
         }
     }
 
@@ -98,17 +102,25 @@ final class MiniViewerController {
 
     func show() throws {
         try queue.sync {
-            isVisible = true
-            try startMiniViewerLocked()
-            sendPayloadLocked()
+            if isProcessRunningLocked() {
+                isVisible = true
+                sendVisibilityUpdateLocked()
+            } else {
+                isVisible = true
+                try startMiniViewerLocked()
+            }
         }
     }
 
     func prepareForFastToggle() throws {
         try queue.sync {
-            isVisible = false
-            try startMiniViewerLocked()
-            sendPayloadLocked()
+            if isProcessRunningLocked() {
+                isVisible = false
+                sendVisibilityUpdateLocked()
+            } else {
+                isVisible = false
+                try startMiniViewerLocked()
+            }
         }
     }
 
@@ -116,7 +128,7 @@ final class MiniViewerController {
         try queue.sync {
             if isProcessRunningLocked() {
                 isVisible.toggle()
-                sendPayloadLocked()
+                sendVisibilityUpdateLocked()
             } else {
                 isVisible = true
                 try startMiniViewerLocked()
@@ -185,12 +197,12 @@ final class MiniViewerController {
         }
 
         // Push the first snapshot immediately so the helper does not wait for the periodic ticker.
-        sendPayloadLocked()
+        requestPayloadRefreshLocked()
 
         let timer = DispatchSource.makeTimerSource(queue: queue)
         timer.schedule(deadline: .now(), repeating: .seconds(3))
         timer.setEventHandler { [weak self] in
-            self?.sendPayloadLocked()
+            self?.requestPayloadRefreshLocked()
         }
         timer.resume()
         updaterTimer = timer
@@ -207,6 +219,9 @@ final class MiniViewerController {
         stdinHandle = nil
         stdoutHandle = nil
         stdoutBuffer.removeAll(keepingCapacity: false)
+        payloadRefreshPending = false
+        payloadRefreshInFlight = false
+        payloadRefreshGeneration &+= 1
 
         if let process {
             if process.isRunning {
@@ -249,15 +264,72 @@ final class MiniViewerController {
         return !process.isRunning
     }
 
-    private func sendPayloadLocked() {
+    private func requestPayloadRefreshLocked() {
+        guard isProcessRunningLocked() else {
+            return
+        }
+
+        payloadRefreshPending = true
+        runPayloadRefreshIfNeededLocked()
+    }
+
+    private func runPayloadRefreshIfNeededLocked() {
+        guard payloadRefreshPending,
+              !payloadRefreshInFlight else {
+            return
+        }
+
+        guard isProcessRunningLocked() else {
+            payloadRefreshPending = false
+            return
+        }
+
+        payloadRefreshPending = false
+        payloadRefreshInFlight = true
+        let generation = payloadRefreshGeneration
+
+        payloadQueue.async { [weak self] in
+            guard let self else { return }
+
+            let projects = self.collectProjectPayload()
+
+            self.queue.async {
+                self.payloadRefreshInFlight = false
+
+                guard generation == self.payloadRefreshGeneration else {
+                    self.runPayloadRefreshIfNeededLocked()
+                    return
+                }
+
+                self.writePayloadLocked(projects: projects)
+                self.runPayloadRefreshIfNeededLocked()
+            }
+        }
+    }
+
+    private func sendVisibilityUpdateLocked() {
+        let command = MiniViewerVisibilityCommand(command: "setVisibility", isVisible: isVisible)
+        writeJSONToHelperLocked(command)
+    }
+
+    private func writePayloadLocked(projects: [MiniViewerProjectPayload]) {
+        let payload = MiniViewerPayload(
+            side: side,
+            uiElementSize: uiElementSize,
+            isVisible: isVisible,
+            projects: projects
+        )
+        writeJSONToHelperLocked(payload)
+    }
+
+    private func writeJSONToHelperLocked<T: Encodable>(_ value: T) {
         guard isProcessRunningLocked(),
               let stdinHandle else {
             return
         }
 
-        let payload = collectPayloadLocked()
         do {
-            var data = try JSONEncoder().encode(payload)
+            var data = try JSONEncoder().encode(value)
             data.append(0x0A)
             try stdinHandle.write(contentsOf: data)
         } catch {
@@ -265,7 +337,7 @@ final class MiniViewerController {
         }
     }
 
-    private func collectPayloadLocked() -> MiniViewerPayload {
+    private func collectProjectPayload() -> [MiniViewerProjectPayload] {
         let response = sessionDetectionService.getAllSessions()
 
         let visibleSessions: [Session]
@@ -314,12 +386,7 @@ final class MiniViewerController {
             projects[index].diffDeletions = stats.deletions
         }
 
-        return MiniViewerPayload(
-            side: side,
-            uiElementSize: uiElementSize,
-            isVisible: isVisible,
-            projects: projects
-        )
+        return projects
     }
 
     private func normalizedBranch(_ branch: String?) -> String? {
@@ -569,4 +636,9 @@ private struct MiniViewerAction: Codable {
     let pid: UInt32
     let projectPath: String
     let projectName: String
+}
+
+private struct MiniViewerVisibilityCommand: Codable {
+    let command: String
+    let isVisible: Bool
 }
