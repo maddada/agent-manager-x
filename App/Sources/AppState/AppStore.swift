@@ -256,6 +256,10 @@ final class AppStore: ObservableObject {
         openInTerminal(path: session.projectPath)
     }
 
+    func openProjectInTerminal(path: String) {
+        openInTerminal(path: path)
+    }
+
     func runProjectCommand(projectPath: String, command: String) {
         do {
             try coreActionsService.runProjectCommand(

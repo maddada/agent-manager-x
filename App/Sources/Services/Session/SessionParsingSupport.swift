@@ -38,6 +38,8 @@ struct CodexSessionFile {
     let lastActivityAt: String?
     let hasPendingTask: Bool
     let lastTaskSignalAt: Date?
+    let lastInterruptAt: Date?
+    let lastTerminalEventAt: Date?
 }
 
 struct OpenCodeProject: Decodable {
@@ -237,6 +239,7 @@ enum SessionParsingSupport {
         return lowered.hasPrefix("<environment_context>") ||
             lowered.hasPrefix("<permissions instructions>") ||
             lowered.hasPrefix("# agents.md instructions") ||
+            isLocalCommandMetadataText(trimmed) ||
             lowered.hasPrefix("<turn_aborted")
     }
 
@@ -257,6 +260,14 @@ enum SessionParsingSupport {
 
     static func isLocalClaudeCommand(content: Any?) -> Bool {
         let text = (extractText(from: content) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else {
+            return false
+        }
+
+        if isLocalCommandMetadataText(text) {
+            return true
+        }
+
         guard text.hasPrefix("/") else {
             return false
         }
@@ -264,6 +275,21 @@ enum SessionParsingSupport {
         return localClaudeCommands.contains { command in
             text == command || text.hasPrefix("\(command) ")
         }
+    }
+
+    private static func isLocalCommandMetadataText(_ text: String) -> Bool {
+        let lowered = text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !lowered.isEmpty else {
+            return false
+        }
+
+        return lowered.hasPrefix("<local-command-caveat>") ||
+            lowered.hasPrefix("<local-command-stdout") ||
+            lowered.hasPrefix("<local-command-stderr") ||
+            lowered.hasPrefix("<local-command-exit-code") ||
+            lowered.hasPrefix("<command-name>") ||
+            lowered.hasPrefix("<command-message>") ||
+            lowered.hasPrefix("<command-args>")
     }
 
     static func truncate(_ value: String, maxChars: Int) -> String {
@@ -346,7 +372,6 @@ enum SessionParsingSupport {
         var lastUserMessage: String?
         var lastTaskStartedAt: Date?
         var lastTaskCompletedAt: Date?
-        var lastTaskSignalAt: Date?
         var lastTaskSignalTimestamp: String?
 
         for entry in recent {
@@ -355,17 +380,18 @@ enum SessionParsingSupport {
             let timestampDate = parseISODate(timestamp)
 
             func markSignal() {
-                guard let timestampDate else { return }
-                lastTaskSignalAt = timestampDate
-                if let timestamp {
-                    lastTaskSignalTimestamp = timestamp
-                }
+                guard let timestamp else { return }
+                lastTaskSignalTimestamp = timestamp
             }
 
             switch type {
             case "user":
                 if let messageBody = entry["message"] as? [String: Any],
                    let content = messageBody["content"] {
+                    if isLocalClaudeCommand(content: content) {
+                        continue
+                    }
+
                     // User tool_result lines are intermediate task activity, not a new prompt.
                     if hasBlock(ofType: "tool_result", in: content) {
                         markSignal()
@@ -377,6 +403,10 @@ enum SessionParsingSupport {
             case "assistant":
                 if let messageBody = entry["message"] as? [String: Any],
                    let content = messageBody["content"] {
+                    if isLocalClaudeCommand(content: content) {
+                        continue
+                    }
+
                     if hasBlock(ofType: "thinking", in: content) || hasBlock(ofType: "tool_use", in: content) {
                         markSignal()
                     }

@@ -401,7 +401,7 @@ private struct SessionRowView: View {
 
     private var messageLine: String {
         guard let fullMessage else {
-            return "No recent message"
+            return "No session message yet"
         }
 
         // Normalize multi-line content so stale sessions with newline-prefixed messages
@@ -417,11 +417,24 @@ private struct SessionRowView: View {
         }
 
         let trimmed = lastMessage.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.isEmpty {
+        if trimmed.isEmpty || isNonDisplayableMessage(trimmed) {
             return nil
         }
 
         return trimmed
+    }
+
+    private func isNonDisplayableMessage(_ text: String) -> Bool {
+        let lowered = text.lowercased()
+        return lowered == "(no content)" ||
+            lowered == "no content" ||
+            lowered.hasPrefix("<local-command-caveat>") ||
+            lowered.hasPrefix("<local-command-stdout") ||
+            lowered.hasPrefix("<local-command-stderr") ||
+            lowered.hasPrefix("<local-command-exit-code") ||
+            lowered.hasPrefix("<command-name>") ||
+            lowered.hasPrefix("<command-message>") ||
+            lowered.hasPrefix("<command-args>")
     }
 
     private func showMessagePopover() {
@@ -609,6 +622,13 @@ private struct SessionRowView: View {
                 )
                 .offset(y: popoverYOffset)
                 .zIndex(5000)
+                .onTapGesture {
+                    showMessagePopoverTask?.cancel()
+                    hideMessagePopoverTask?.cancel()
+                    isMessagePopoverPresented = false
+                    isMessagePopoverHovered = false
+                    isRowHovered = false
+                }
                 .onHover { hovering in
                     isMessagePopoverHovered = hovering
                     if hovering {
@@ -826,7 +846,7 @@ final class MiniViewerAppDelegate: NSObject, NSApplicationDelegate {
         panel.level = .floating
         panel.hidesOnDeactivate = false
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
-        panel.ignoresMouseEvents = false
+        panel.ignoresMouseEvents = true
         panel.isMovable = false
         panel.isMovableByWindowBackground = false
 
@@ -883,10 +903,13 @@ final class MiniViewerAppDelegate: NSObject, NSApplicationDelegate {
         guard let screenFrame = NSScreen.main?.visibleFrame else { return }
 
         guard model.isVisible && model.hasVisibleSessions else {
+            panel.ignoresMouseEvents = true
             panel.alphaValue = 0
             panel.orderOut(nil)
             return
         }
+
+        panel.ignoresMouseEvents = !model.isExpanded
 
         let width = model.isExpanded ? expandedWidth : collapsedWidth
         let height = desiredHeight(for: model.projects)

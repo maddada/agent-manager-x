@@ -367,6 +367,7 @@ private struct ProjectGroupCardView: View {
     @State private var commandDraft = ""
     @State private var commandEditorVisible = false
     @State private var runAfterSave = false
+    @State private var activePopoverSessionID: String?
 
     private var groupBranch: String? {
         group.sessions
@@ -400,6 +401,9 @@ private struct ProjectGroupCardView: View {
                 onOpenProject: {
                     store.openProject(path: group.projectPath, projectName: group.projectName)
                 },
+                onOpenInTerminal: {
+                    store.openProjectInTerminal(path: group.projectPath)
+                },
                 onRunAction: { action in
                     runProjectAction(action)
                 },
@@ -413,7 +417,17 @@ private struct ProjectGroupCardView: View {
 
             VStack(spacing: compactSessions ? 8 : 10) {
                 ForEach(group.sessions, id: \.renderID) { session in
-                    SessionCardView(session: session, compact: compactSessions)
+                    SessionCardView(
+                        session: session,
+                        compact: compactSessions,
+                        onMessagePopoverVisibilityChanged: { presented in
+                            if presented {
+                                activePopoverSessionID = session.renderID
+                            } else if activePopoverSessionID == session.renderID {
+                                activePopoverSessionID = nil
+                            }
+                        }
+                    )
                 }
             }
             .padding(12)
@@ -428,6 +442,7 @@ private struct ProjectGroupCardView: View {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .strokeBorder(Color.primary.opacity(0.12), lineWidth: 1)
         )
+        .zIndex(activePopoverSessionID == nil ? 0 : 10_000)
         .sheet(isPresented: $commandEditorVisible) {
             ProjectCommandDialog(
                 action: commandEditorAction,
@@ -477,6 +492,7 @@ private struct ProjectGroupHeaderView: View {
     let actionsOnNewRow: Bool
     let onKillAll: () -> Void
     let onOpenProject: () -> Void
+    let onOpenInTerminal: () -> Void
     let onRunAction: (ProjectCommandAction) -> Void
     let onEditAction: (ProjectCommandAction) -> Void
     @State private var isHoveringHeader = false
@@ -575,6 +591,12 @@ private struct ProjectGroupHeaderView: View {
 
     private var projectActionButtons: some View {
         HStack(spacing: 6) {
+            Button("Terminal", action: onOpenInTerminal)
+                .buttonStyle(.bordered)
+                .focusable(false)
+                .pointerCursor()
+                .controlSize(.small)
+
             ForEach(ProjectCommandAction.allCases, id: \.rawValue) { action in
                 ProjectQuickActionButton(
                     title: action.label,
@@ -615,6 +637,7 @@ private struct SessionCardView: View {
 
     let session: Session
     let compact: Bool
+    let onMessagePopoverVisibilityChanged: (Bool) -> Void
 
     @State private var renameDialogVisible = false
     @State private var urlDialogVisible = false
@@ -813,6 +836,7 @@ private struct SessionCardView: View {
 
         }
         .contentShape(Rectangle())
+        .pointerCursor()
         .onHover { hovering in
             isHoveringCard = hovering
         }
@@ -850,6 +874,13 @@ private struct SessionCardView: View {
                 .shadow(color: .black.opacity(0.28), radius: 12, x: 0, y: 4)
                 .offset(y: compact ? 62 : 92)
                 .zIndex(3000)
+                .onTapGesture {
+                    showMessagePopoverTask?.cancel()
+                    hideMessagePopoverTask?.cancel()
+                    isMessagePopoverPresented = false
+                    isMessagePopoverHovered = false
+                    isMessagePreviewHovered = false
+                }
                 .onHover { hovering in
                     isMessagePopoverHovered = hovering
                     if hovering {
@@ -867,6 +898,10 @@ private struct SessionCardView: View {
             isMessagePopoverPresented = false
             isMessagePreviewHovered = false
             isMessagePopoverHovered = false
+            onMessagePopoverVisibilityChanged(false)
+        }
+        .onChange(of: isMessagePopoverPresented) { _, presented in
+            onMessagePopoverVisibilityChanged(presented)
         }
         .contextMenu {
             Button("Open in Editor") {

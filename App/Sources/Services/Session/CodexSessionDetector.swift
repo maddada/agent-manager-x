@@ -274,8 +274,9 @@ final class CodexSessionDetector: AgentSessionDetecting {
         var lastActivityAt: String?
         var lastUserMessageAt: Date?
         var lastTaskStartedAt: Date?
-        var lastTaskCompleteAt: Date?
         var lastTaskSignalAt: Date?
+        var lastInterruptAt: Date?
+        var lastTerminalEventAt: Date?
 
         for rawLine in text.split(separator: "\n", omittingEmptySubsequences: true) {
             let line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -382,7 +383,22 @@ final class CodexSessionDetector: AgentSessionDetecting {
                         }
                     case "task_complete":
                         if let timestampDate {
-                            lastTaskCompleteAt = timestampDate
+                            lastTerminalEventAt = max(lastTerminalEventAt ?? .distantPast, timestampDate)
+                        }
+                        if let timestamp {
+                            lastActivityAt = timestamp
+                        }
+                    case "turn_aborted":
+                        if let timestampDate {
+                            lastInterruptAt = timestampDate
+                            lastTerminalEventAt = max(lastTerminalEventAt ?? .distantPast, timestampDate)
+                        }
+                        if let timestamp {
+                            lastActivityAt = timestamp
+                        }
+                    case "thread_rolled_back", "item_completed":
+                        if let timestampDate {
+                            lastTerminalEventAt = max(lastTerminalEventAt ?? .distantPast, timestampDate)
                         }
                         if let timestamp {
                             lastActivityAt = timestamp
@@ -396,12 +412,10 @@ final class CodexSessionDetector: AgentSessionDetecting {
             }
         }
 
-        let pendingTrigger = [lastTaskStartedAt, lastUserMessageAt].compactMap { $0 }.max()
+        let pendingTrigger = [lastTaskStartedAt, lastUserMessageAt, lastTaskSignalAt].compactMap { $0 }.max()
         let hasPendingTask: Bool
         if let pendingTrigger {
-            hasPendingTask = isDate(pendingTrigger, newerThan: lastTaskCompleteAt)
-        } else if let lastTaskSignalAt {
-            hasPendingTask = isDate(lastTaskSignalAt, newerThan: lastTaskCompleteAt)
+            hasPendingTask = isDate(pendingTrigger, newerThan: lastTerminalEventAt)
         } else {
             hasPendingTask = false
         }
@@ -417,7 +431,9 @@ final class CodexSessionDetector: AgentSessionDetecting {
             lastRole: lastRole,
             lastActivityAt: lastActivityAt,
             hasPendingTask: hasPendingTask,
-            lastTaskSignalAt: lastTaskSignalAt
+            lastTaskSignalAt: lastTaskSignalAt,
+            lastInterruptAt: lastInterruptAt,
+            lastTerminalEventAt: lastTerminalEventAt
         )
     }
 
@@ -493,7 +509,9 @@ final class CodexSessionDetector: AgentSessionDetecting {
             lastRole: file.lastRole,
             modified: file.modified,
             hasPendingTask: file.hasPendingTask,
-            lastTaskSignalAt: file.lastTaskSignalAt
+            lastTaskSignalAt: file.lastTaskSignalAt,
+            lastInterruptAt: file.lastInterruptAt,
+            lastTerminalEventAt: file.lastTerminalEventAt
         )
 
         let lastActivityAt = file.lastActivityAt ?? SessionParsingSupport.formatISODate(file.modified)
@@ -538,8 +556,19 @@ final class CodexSessionDetector: AgentSessionDetecting {
         lastRole: String?,
         modified: Date,
         hasPendingTask: Bool,
-        lastTaskSignalAt: Date?
+        lastTaskSignalAt: Date?,
+        lastInterruptAt: Date?,
+        lastTerminalEventAt: Date?
     ) -> SessionStatus {
+        if let lastInterruptAt {
+            let interruptAgeSeconds = Date().timeIntervalSince(lastInterruptAt)
+            let recentInterrupt = interruptAgeSeconds <= 90
+            let terminalAfterInterrupt = (lastTerminalEventAt ?? .distantPast) >= lastInterruptAt
+            if recentInterrupt && terminalAfterInterrupt && !hasPendingTask {
+                return .waiting
+            }
+        }
+
         if hasPendingTask {
             let referenceDate = lastTaskSignalAt ?? modified
             if Date().timeIntervalSince(referenceDate) <= 3 * 60 {

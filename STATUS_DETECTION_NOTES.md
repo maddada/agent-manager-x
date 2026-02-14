@@ -115,3 +115,55 @@ Command:
 
 Result:
 - `BUILD SUCCEEDED`
+
+## Follow-up Fix: Claude `/clear` False Processing + Empty Preview
+
+Date: 2026-02-14 (same follow-up)
+
+Files:
+- `App/Sources/Services/Session/SessionParsingSupport.swift`
+- `App/Resources/native-mini-viewer/MiniViewer.swift`
+
+Issue:
+- Claude local-command payloads (for example `/clear` output wrappers like `<local-command-stdout>...</local-command-stdout>`) were being interpreted as normal user/task activity.
+- This caused `hasPendingTask` to stay true and made sessions appear as `.processing` even when idle.
+- The same payload text could show in mini viewer preview.
+
+What changed:
+- Added local-command metadata detection (`<command-name>`, `<command-message>`, `<command-args>`, `<local-command-*>`).
+- Excluded those payloads from Claude pending-task lifecycle tracking.
+- Treated those payloads as suppressible preview text.
+- Updated mini viewer fallback text to `No session message yet`.
+- Added mini viewer guard to hide non-displayable placeholder payloads even if one slips through.
+
+Expected behavior now:
+- After `/clear`, Claude sessions should settle to waiting/idle instead of sticky processing.
+- Mini viewer should show fallback text instead of raw local-command XML-like tags when there is no displayable message.
+
+## Follow-up Fix: Codex Esc Interrupt Sticky Processing
+
+Date: 2026-02-14 (same follow-up)
+
+Files:
+- `App/Sources/Services/Session/SessionParsingSupport.swift`
+- `App/Sources/Services/Session/CodexSessionDetector.swift`
+
+Issue:
+- When Codex was interrupted with Esc while processing, sessions could stay in `.processing` even though work had stopped.
+- Root cause: parser only treated `task_complete` as a terminal event, while real Codex logs also emit `turn_aborted` and `thread_rolled_back` during interrupt flow.
+
+What changed:
+- Extended `CodexSessionFile` with:
+  - `lastInterruptAt: Date?`
+  - `lastTerminalEventAt: Date?`
+- Codex parser now treats these `event_msg` types as terminal signals:
+  - `task_complete`
+  - `turn_aborted`
+  - `thread_rolled_back`
+  - `item_completed` (defensive compatibility)
+- Pending-task derivation now compares latest trigger/signal against latest terminal event.
+- Status logic now forces immediate `.waiting` after recent interrupt (<= 90s) when there is no newer pending task.
+
+Expected behavior now:
+- Pressing Esc mid-processing transitions Codex sessions back to waiting on the next refresh cycle.
+- If a new task starts after interrupt, session returns to processing normally.
