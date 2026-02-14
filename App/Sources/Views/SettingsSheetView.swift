@@ -37,6 +37,7 @@ struct SettingsSheetView: View {
                     messageSection
                 }
                 .padding(16)
+                .mainAppScrollbarStyle(for: store.mainAppUIElementSize)
             }
             .frame(minWidth: 500, minHeight: 580)
         }

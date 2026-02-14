@@ -120,6 +120,7 @@ private struct AppHeaderView: View {
                     }
                     .buttonStyle(.borderless)
                     .focusable(false)
+                    .pointerCursor()
                     .help("Background sessions")
                     .popover(isPresented: $showBackgroundPanel, arrowEdge: .bottom) {
                         BackgroundSessionsPanel()
@@ -140,6 +141,7 @@ private struct AppHeaderView: View {
                     }
                     .buttonStyle(.borderless)
                     .focusable(false)
+                    .pointerCursor()
                     .help("Kill idle sessions")
                 }
 
@@ -154,6 +156,7 @@ private struct AppHeaderView: View {
                     }
                     .buttonStyle(.borderless)
                     .focusable(false)
+                    .pointerCursor()
                     .help("Kill stale sessions")
                 }
 
@@ -170,6 +173,7 @@ private struct AppHeaderView: View {
                         }
                         .buttonStyle(.borderless)
                         .focusable(false)
+                        .pointerCursor()
                         .help("Kill all \(type.rawValue) sessions")
                     }
                 }
@@ -183,6 +187,7 @@ private struct AppHeaderView: View {
                     .buttonStyle(.borderless)
                     .focusable(false)
                     .disabled(store.notificationState.isLoading)
+                    .pointerCursor()
                     .help(store.notificationState.bellModeEnabled ? "Bell mode" : "Voice mode")
                 }
 
@@ -194,6 +199,7 @@ private struct AppHeaderView: View {
                 }
                 .buttonStyle(.borderless)
                 .focusable(false)
+                .pointerCursor()
                 .help(store.displayMode == .list ? "Switch to grid" : "Switch to list")
 
                 Button {
@@ -203,6 +209,7 @@ private struct AppHeaderView: View {
                 }
                 .buttonStyle(.borderless)
                 .focusable(false)
+                .pointerCursor()
                 .help("Settings")
 
                 Button {
@@ -218,6 +225,7 @@ private struct AppHeaderView: View {
                 }
                 .buttonStyle(.borderless)
                 .focusable(false)
+                .pointerCursor()
                 .help("Refresh")
             }
             .fixedSize(horizontal: true, vertical: false)
@@ -267,6 +275,7 @@ private struct BackgroundSessionsPanel: View {
                         .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.06)))
                     }
                 }
+                .mainAppScrollbarStyle(for: store.mainAppUIElementSize)
             }
             .frame(maxHeight: 220)
 
@@ -327,6 +336,7 @@ private struct MainContentView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 14)
+                    .mainAppScrollbarStyle(for: store.mainAppUIElementSize)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             } else {
@@ -339,6 +349,7 @@ private struct MainContentView: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(14)
+                    .mainAppScrollbarStyle(for: store.mainAppUIElementSize)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             }
@@ -482,6 +493,7 @@ private struct ProjectGroupHeaderView: View {
                 }
                 .buttonStyle(.plain)
                 .focusable(false)
+                .pointerCursor()
                 .help("Kill all sessions in project")
                 .opacity(isHoveringHeader ? 1 : 0)
                 .allowsHitTesting(isHoveringHeader)
@@ -520,7 +532,7 @@ private struct ProjectGroupHeaderView: View {
                                     Text("-\(diffStats.deletions)")
                                         .foregroundStyle(.red)
                                 }
-                                .font(.caption.monospacedDigit())
+                                .font(store.mainAppUIElementSize.projectHeaderMetaMonospacedFont)
                                 .layoutPriority(1)
                             }
 
@@ -536,6 +548,7 @@ private struct ProjectGroupHeaderView: View {
                 }
                 .buttonStyle(.plain)
                 .focusable(false)
+                .pointerCursor()
                 .help("Open project")
                 .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
                 .layoutPriority(0)
@@ -587,6 +600,7 @@ private struct ProjectQuickActionButton: View {
         }
         .buttonStyle(.bordered)
         .focusable(false)
+        .pointerCursor()
         .controlSize(.small)
         .contextMenu {
             Button("Edit Command") {
@@ -607,6 +621,11 @@ private struct SessionCardView: View {
     @State private var renameDraft = ""
     @State private var urlDraft = ""
     @State private var isHoveringCard = false
+    @State private var isMessagePreviewHovered = false
+    @State private var isMessagePopoverHovered = false
+    @State private var isMessagePopoverPresented = false
+    @State private var showMessagePopoverTask: DispatchWorkItem?
+    @State private var hideMessagePopoverTask: DispatchWorkItem?
 
     private var customName: String {
         store.customName(for: session.id)
@@ -630,6 +649,47 @@ private struct SessionCardView: View {
         return message
     }
 
+    private var fullMessage: String? {
+        guard let message = session.lastMessage else {
+            return nil
+        }
+
+        let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private var messagePopoverSize: CGSize {
+        compact ? CGSize(width: 430, height: 210) : CGSize(width: 520, height: 240)
+    }
+
+    private func scheduleMessagePopoverShow() {
+        hideMessagePopoverTask?.cancel()
+        showMessagePopoverTask?.cancel()
+        guard fullMessage != nil else {
+            return
+        }
+
+        let task = DispatchWorkItem {
+            if isMessagePreviewHovered {
+                isMessagePopoverPresented = true
+            }
+        }
+        showMessagePopoverTask = task
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.65, execute: task)
+    }
+
+    private func scheduleMessagePopoverHide() {
+        showMessagePopoverTask?.cancel()
+        hideMessagePopoverTask?.cancel()
+        let task = DispatchWorkItem {
+            if !isMessagePreviewHovered && !isMessagePopoverHovered {
+                isMessagePopoverPresented = false
+            }
+        }
+        hideMessagePopoverTask = task
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.16, execute: task)
+    }
+
     private var metricsLine: String {
         let timeAgo = formatTimeAgo(session.lastActivityAt)
         var parts = [
@@ -646,10 +706,22 @@ private struct SessionCardView: View {
         return parts.joined(separator: " • ")
     }
 
+    private var cardTopPadding: CGFloat {
+        compact ? 8 : 9
+    }
+
+    private var messageTopPadding: CGFloat {
+        compact ? 8 : 10
+    }
+
+    private var metricsTopPadding: CGFloat {
+        compact ? 6 : 8
+    }
+
     var body: some View {
         ZStack(alignment: .topLeading) {
-            VStack(alignment: .leading, spacing: compact ? 6 : 8) {
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(alignment: .center, spacing: 8) {
                     Text(statusStyle.label)
                         .font(.caption.weight(.semibold))
                         .padding(.horizontal, 8)
@@ -678,15 +750,26 @@ private struct SessionCardView: View {
                     .foregroundStyle(.primary)
                     .lineLimit(compact ? 1 : 3)
                     .truncationMode(.tail)
-                    .help(session.lastMessage ?? previewText)
+                    .padding(.top, messageTopPadding)
+                    .onHover { hovering in
+                        isMessagePreviewHovered = hovering
+                        if hovering {
+                            scheduleMessagePopoverShow()
+                        } else {
+                            scheduleMessagePopoverHide()
+                        }
+                    }
 
                 Text(metricsLine)
-                    .font(.caption.monospaced())
+                    .font(store.mainAppUIElementSize.sessionMetricsFont)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .truncationMode(.middle)
+                    .padding(.top, metricsTopPadding)
             }
-            .padding(12)
+            .padding(.top, cardTopPadding)
+            .padding(.horizontal, 12)
+            .padding(.bottom, 12)
             .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
@@ -727,10 +810,16 @@ private struct SessionCardView: View {
                 .offset(x: compact ? 6 : 10, y: compact ? 72 : 96)
                 .help(customURL)
             }
+
         }
         .contentShape(Rectangle())
         .onHover { hovering in
             isHoveringCard = hovering
+        }
+        .onChange(of: isHoveringCard) { _, hovering in
+            if !hovering {
+                scheduleMessagePopoverHide()
+            }
         }
         .onTapGesture {
             store.openSession(session)
@@ -738,6 +827,47 @@ private struct SessionCardView: View {
         .onMiddleClick(perform: {
             store.killSession(session)
         })
+        .overlay(alignment: .top) {
+            if isMessagePopoverPresented, let fullMessage {
+                ScrollView(.vertical, showsIndicators: true) {
+                    Text(fullMessage)
+                        .font(.body)
+                        .foregroundStyle(.primary)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(14)
+                }
+                .mainAppScrollbarStyle(for: store.mainAppUIElementSize)
+                .frame(width: messagePopoverSize.width, height: messagePopoverSize.height)
+                .background(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(Color(nsColor: .windowBackgroundColor))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(Color.primary.opacity(0.24), lineWidth: 1)
+                )
+                .shadow(color: .black.opacity(0.28), radius: 12, x: 0, y: 4)
+                .offset(y: compact ? 62 : 92)
+                .zIndex(3000)
+                .onHover { hovering in
+                    isMessagePopoverHovered = hovering
+                    if hovering {
+                        hideMessagePopoverTask?.cancel()
+                    } else {
+                        scheduleMessagePopoverHide()
+                    }
+                }
+            }
+        }
+        .zIndex(isMessagePopoverPresented ? 20_000 : 0)
+        .onDisappear {
+            showMessagePopoverTask?.cancel()
+            hideMessagePopoverTask?.cancel()
+            isMessagePopoverPresented = false
+            isMessagePreviewHovered = false
+            isMessagePopoverHovered = false
+        }
         .contextMenu {
             Button("Open in Editor") {
                 store.openSessionInEditor(session)
@@ -1203,26 +1333,52 @@ private extension UIElementSize {
     var projectHeaderTitleFont: Font {
         switch self {
         case .small:
-            return .headline
-        case .medium:
             return .title3.weight(.semibold)
-        case .large:
+        case .medium:
             return .title2.weight(.semibold)
-        case .extraLarge:
+        case .large:
             return .title.weight(.semibold)
+        case .extraLarge:
+            return .largeTitle.weight(.semibold)
         }
     }
 
     var projectHeaderMetaFont: Font {
         switch self {
         case .small:
-            return .caption
+            return .footnote
         case .medium:
-            return .subheadline
-        case .large:
             return .body
-        case .extraLarge:
+        case .large:
             return .title3
+        case .extraLarge:
+            return .title2
+        }
+    }
+
+    var projectHeaderMetaMonospacedFont: Font {
+        switch self {
+        case .small:
+            return .system(.footnote, design: .monospaced)
+        case .medium:
+            return .system(.body, design: .monospaced)
+        case .large:
+            return .system(.title3, design: .monospaced)
+        case .extraLarge:
+            return .system(.title2, design: .monospaced)
+        }
+    }
+
+    var sessionMetricsFont: Font {
+        switch self {
+        case .small:
+            return .system(.subheadline, design: .monospaced)
+        case .medium:
+            return .system(.body, design: .monospaced)
+        case .large:
+            return .system(.title3, design: .monospaced)
+        case .extraLarge:
+            return .system(.title2, design: .monospaced)
         }
     }
 }

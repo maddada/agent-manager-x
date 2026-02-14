@@ -33,7 +33,7 @@ struct ContentView: View {
     }
 }
 
-private extension UIElementSize {
+extension UIElementSize {
     var mainAppScale: CGFloat {
         switch self {
         case .small:
