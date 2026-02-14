@@ -4,7 +4,7 @@ A macOS desktop app to monitor your Claude Code, Codex, OpenCode AI coding agent
 
 Shows RAM and CPU usage for every running session and lets you code Stale or Idle chats that are wasting memory with 1 click!
 
-This project is built as a native macOS app with Swift and SwiftUI (not Tauri/React).
+This project is built as a native macOS app with Swift and SwiftUI to make it very snappy and light.
 
 Project inspired by [@ozankasikci](https://github.com/ozankasikci), whose app is built with Tauri + React and now has a different feature set.
 
