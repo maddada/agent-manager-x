@@ -579,8 +579,8 @@ private struct ProjectGroupHeaderView: View {
 
             if actionsOnNewRow {
                 HStack {
-                    Spacer(minLength: 0)
                     projectActionButtons
+                    Spacer(minLength: 0)
                 }
             }
         }
