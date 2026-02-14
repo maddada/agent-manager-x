@@ -1,0 +1,24 @@
+import Foundation
+
+enum SettingsKeys {
+    static let globalHotkey = "agent-manager-x-hotkey"
+    static let miniViewerHotkey = "agent-manager-x-mini-viewer-hotkey"
+    static let miniViewerSide = "agent-manager-x-mini-viewer-side"
+    static let miniViewerShowOnStart = "agent-manager-x-mini-viewer-show-on-start"
+    static let mainAppUIElementSize = "agent-manager-x-main-app-ui-element-size"
+    static let miniViewerUIElementSize = "agent-manager-x-mini-viewer-ui-element-size"
+    static let defaultEditor = "agent-manager-x-default-editor"
+    static let customEditorCommand = "agent-manager-x-custom-editor-command"
+    static let defaultTerminal = "agent-manager-x-default-terminal"
+    static let customTerminalCommand = "agent-manager-x-custom-terminal-command"
+    static let cardClickAction = "agent-manager-x-click-action"
+    static let displayMode = "agent-manager-x-display-mode"
+    static let experimentalVSCodeSessionOpening = "agent-manager-x-expiremental-vs-code-session-opening"
+    static let theme = "agent-manager-x-theme"
+    static let backgroundImage = "agent-manager-x-background-image"
+    static let overlayOpacity = "agent-manager-x-overlay-opacity"
+    static let overlayColor = "agent-manager-x-overlay-color"
+    static let projectCommands = "agent-manager-x-project-commands"
+    static let customNames = "agent-manager-x-custom-names"
+    static let customURLs = "agent-manager-x-custom-urls"
+}
