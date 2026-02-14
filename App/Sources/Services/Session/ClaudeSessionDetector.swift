@@ -255,6 +255,14 @@ final class ClaudeSessionDetector: AgentSessionDetecting {
 
         status = SessionParsingSupport.applyIdleStaleUpgrade(baseStatus: status, timestamp: data.lastTimestamp)
 
+        if data.hasPendingTask {
+            let taskSignalTimestamp = data.lastTaskSignalAt ?? data.lastTimestamp
+            let signalAge = SessionParsingSupport.ageSeconds(from: taskSignalTimestamp) ?? .infinity
+            if signalAge <= 3 * 60 {
+                status = .processing
+            }
+        }
+
         var lastMessage = data.lastMessage
         var lastRole = data.lastRole
 

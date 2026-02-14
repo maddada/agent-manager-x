@@ -207,7 +207,9 @@ final class OpenCodeSessionDetector: AgentSessionDetecting {
         let status = determineOpenCodeStatus(
             cpuUsage: process.cpuUsage,
             lastRole: lastMessage.role,
-            updatedMs: openSession.time.updated
+            updatedMs: openSession.time.updated,
+            hasPendingTask: lastMessage.hasPendingTask,
+            lastTaskSignalMs: lastMessage.lastTaskSignalMs
         )
 
         let displayMessage: String?
@@ -238,14 +240,30 @@ final class OpenCodeSessionDetector: AgentSessionDetecting {
         )
     }
 
-    private func determineOpenCodeStatus(cpuUsage: Double, lastRole: String?, updatedMs: UInt64) -> SessionStatus {
+    private func determineOpenCodeStatus(
+        cpuUsage: Double,
+        lastRole: String?,
+        updatedMs: UInt64,
+        hasPendingTask: Bool,
+        lastTaskSignalMs: UInt64?
+    ) -> SessionStatus {
+        if hasPendingTask {
+            let referenceMs = lastTaskSignalMs ?? updatedMs
+            let ageSeconds = Int(Date().timeIntervalSince1970) - Int(referenceMs / 1000)
+            if ageSeconds <= 3 * 60 {
+                return .processing
+            }
+        }
+
         var status: SessionStatus
         if cpuUsage > 15 {
             status = .processing
         } else if lastRole == "assistant" {
             status = .waiting
         } else if lastRole == "user" {
-            status = .processing
+            let referenceMs = lastTaskSignalMs ?? updatedMs
+            let ageSeconds = Int(Date().timeIntervalSince1970) - Int(referenceMs / 1000)
+            status = ageSeconds <= 60 ? .processing : .waiting
         } else {
             status = .waiting
         }
@@ -270,14 +288,17 @@ final class OpenCodeSessionDetector: AgentSessionDetecting {
         return SessionParsingSupport.formatISODate(Date(timeIntervalSince1970: seconds))
     }
 
-    private func lastMessageForOpenCodeSession(storagePath: URL, sessionID: String) -> (role: String?, text: String?) {
+    private func lastMessageForOpenCodeSession(
+        storagePath: URL,
+        sessionID: String
+    ) -> (role: String?, text: String?, hasPendingTask: Bool, lastTaskSignalMs: UInt64?) {
         let messageDirectory = storagePath.appendingPathComponent("message/\(sessionID)", isDirectory: true)
         guard let messageFiles = try? FileManager.default.contentsOfDirectory(
             at: messageDirectory,
             includingPropertiesForKeys: nil,
             options: [.skipsHiddenFiles]
         ) else {
-            return (nil, nil)
+            return (nil, nil, false, nil)
         }
 
         var messages: [OpenCodeMessage] = []
@@ -291,28 +312,99 @@ final class OpenCodeSessionDetector: AgentSessionDetecting {
         }
 
         messages.sort { $0.time.created > $1.time.created }
+        guard !messages.isEmpty else {
+            return (nil, nil, false, nil)
+        }
+
+        var newestState: OpenCodeMessageState?
+        var newestSignalMs: UInt64?
+        var previewText: String?
+        var latestUserPromptMs: UInt64?
+        var latestAssistantCompletionMs: UInt64?
 
         for message in messages {
-            if let text = openCodeMessageText(storagePath: storagePath, messageID: message.id) {
-                return (message.role, text)
+            let state = openCodeMessageState(storagePath: storagePath, message: message)
+
+            if newestState == nil {
+                newestState = state
+                newestSignalMs = max(message.time.created, message.time.updated)
+            }
+
+            if previewText == nil, let text = state.text {
+                previewText = text
+            }
+
+            if latestUserPromptMs == nil,
+               (state.role?.lowercased() == "user") {
+                latestUserPromptMs = state.createdMs
+            }
+
+            if latestAssistantCompletionMs == nil,
+               (state.role?.lowercased() == "assistant"),
+               (state.text != nil || state.hasStepFinish) {
+                latestAssistantCompletionMs = state.createdMs
             }
         }
 
-        return (nil, nil)
+        let hasPendingTask: Bool = {
+            if let newestState {
+                let role = newestState.role?.lowercased()
+                if role == "user" {
+                    return true
+                }
+
+                if role == "assistant" {
+                    let hasActiveStep = newestState.hasStepStart && !newestState.hasStepFinish
+                    let hasRunningTool = newestState.hasTool && !newestState.hasStepFinish
+                    let hasReasoningOnly = newestState.hasReasoning &&
+                        newestState.text == nil &&
+                        !newestState.hasStepFinish
+                    if hasActiveStep || hasRunningTool || hasReasoningOnly {
+                        return true
+                    }
+                }
+            }
+
+            if let userMs = latestUserPromptMs {
+                return userMs > (latestAssistantCompletionMs ?? 0)
+            }
+
+            return false
+        }()
+
+        return (
+            newestState?.role,
+            previewText,
+            hasPendingTask,
+            newestSignalMs ?? latestUserPromptMs ?? latestAssistantCompletionMs
+        )
     }
 
-    private func openCodeMessageText(storagePath: URL, messageID: String) -> String? {
+    private func openCodeMessageState(storagePath: URL, message: OpenCodeMessage) -> OpenCodeMessageState {
+        let messageID = message.id
         let partDirectory = storagePath.appendingPathComponent("part/\(messageID)", isDirectory: true)
         guard let partFiles = try? FileManager.default.contentsOfDirectory(
             at: partDirectory,
             includingPropertiesForKeys: nil,
             options: [.skipsHiddenFiles]
         ) else {
-            return nil
+            return OpenCodeMessageState(
+                role: message.role,
+                text: nil,
+                createdMs: message.time.created,
+                hasStepStart: false,
+                hasStepFinish: false,
+                hasTool: false,
+                hasReasoning: false
+            )
         }
 
         var textContent: String?
         var reasoningContent: String?
+        var hasStepStart = false
+        var hasStepFinish = false
+        var hasTool = false
+        var hasReasoning = false
 
         for file in partFiles where file.pathExtension == "json" {
             guard let data = try? Data(contentsOf: file),
@@ -323,16 +415,42 @@ final class OpenCodeSessionDetector: AgentSessionDetecting {
 
             if part.partType == "text", let text = part.text {
                 textContent = text
-            } else if part.partType == "reasoning", reasoningContent == nil {
-                reasoningContent = part.text
+            } else if part.partType == "reasoning" {
+                hasReasoning = true
+                if reasoningContent == nil {
+                    reasoningContent = part.text
+                }
+            } else if part.partType == "step-start" {
+                hasStepStart = true
+            } else if part.partType == "step-finish" {
+                hasStepFinish = true
+            } else if part.partType == "tool" {
+                hasTool = true
             }
         }
 
-        guard let content = textContent ?? reasoningContent else {
+        let preview = normalizedOpenCodePreview(textContent ?? reasoningContent)
+
+        return OpenCodeMessageState(
+            role: message.role,
+            text: preview,
+            createdMs: message.time.created,
+            hasStepStart: hasStepStart,
+            hasStepFinish: hasStepFinish,
+            hasTool: hasTool,
+            hasReasoning: hasReasoning
+        )
+    }
+
+    private func normalizedOpenCodePreview(_ content: String?) -> String? {
+        guard let content else {
+            return nil
+        }
+        let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
             return nil
         }
 
-        let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.hasPrefix("<") && (trimmed.contains("ultrawork") || trimmed.contains("mode>")) {
             return nil
         }
@@ -342,4 +460,14 @@ final class OpenCodeSessionDetector: AgentSessionDetecting {
 
         return SessionParsingSupport.truncate(content, maxChars: 200)
     }
+}
+
+private struct OpenCodeMessageState {
+    let role: String?
+    let text: String?
+    let createdMs: UInt64
+    let hasStepStart: Bool
+    let hasStepFinish: Bool
+    let hasTool: Bool
+    let hasReasoning: Bool
 }

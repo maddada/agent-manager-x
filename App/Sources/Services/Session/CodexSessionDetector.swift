@@ -272,6 +272,10 @@ final class CodexSessionDetector: AgentSessionDetecting {
         var lastMessage: String?
         var lastRole: String?
         var lastActivityAt: String?
+        var lastUserMessageAt: Date?
+        var lastTaskStartedAt: Date?
+        var lastTaskCompleteAt: Date?
+        var lastTaskSignalAt: Date?
 
         for rawLine in text.split(separator: "\n", omittingEmptySubsequences: true) {
             let line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -285,6 +289,8 @@ final class CodexSessionDetector: AgentSessionDetecting {
             }
 
             let lineType = json["type"] as? String ?? ""
+            let timestamp = json["timestamp"] as? String
+            let timestampDate = SessionParsingSupport.parseISODate(timestamp)
 
             switch lineType {
             case "session_meta":
@@ -303,38 +309,101 @@ final class CodexSessionDetector: AgentSessionDetecting {
                     cwdTurn = cwd
                 }
             case "response_item":
-                if let payload = json["payload"] as? [String: Any],
-                   (payload["type"] as? String) == "message" {
-                    let role = payload["role"] as? String
-                    if let text = extractTextFromCodexPayload(payload) {
-                        if let cwd = extractCWDFromEnvironmentContext(text) {
-                            cwdEnv = cwd
+                if let payload = json["payload"] as? [String: Any] {
+                    let payloadType = payload["type"] as? String ?? ""
+
+                    switch payloadType {
+                    case "function_call", "function_call_output", "reasoning":
+                        if let timestampDate {
+                            lastTaskSignalAt = timestampDate
                         }
-                        if let normalized = normalizeCodexMessage(text),
-                           let role,
-                           role == "assistant" || role == "user" {
-                            lastMessage = normalized
-                            lastRole = role
-                            lastActivityAt = json["timestamp"] as? String
+                        if let timestamp {
+                            lastActivityAt = timestamp
+                        }
+                    default:
+                        break
+                    }
+
+                    if payloadType == "message" {
+                        let role = payload["role"] as? String
+                        if let text = extractTextFromCodexPayload(payload) {
+                            if let cwd = extractCWDFromEnvironmentContext(text) {
+                                cwdEnv = cwd
+                            }
+                            if let normalized = normalizeCodexMessage(text),
+                               let role,
+                               role == "assistant" || role == "user" {
+                                lastMessage = normalized
+                                lastRole = role
+                                if let timestamp {
+                                    lastActivityAt = timestamp
+                                }
+                            }
                         }
                     }
                 }
             case "event_msg":
-                if let payload = json["payload"] as? [String: Any],
-                   (payload["type"] as? String) == "user_message",
-                   let message = payload["message"] as? String {
-                    if let cwd = extractCWDFromEnvironmentContext(message) {
-                        cwdEnv = cwd
-                    }
-                    if let normalized = normalizeCodexMessage(message) {
-                        lastMessage = normalized
-                        lastRole = "user"
-                        lastActivityAt = json["timestamp"] as? String
+                if let payload = json["payload"] as? [String: Any] {
+                    let payloadType = payload["type"] as? String ?? ""
+
+                    switch payloadType {
+                    case "user_message":
+                        if let message = payload["message"] as? String {
+                            if let cwd = extractCWDFromEnvironmentContext(message) {
+                                cwdEnv = cwd
+                            }
+                            if let normalized = normalizeCodexMessage(message) {
+                                lastMessage = normalized
+                                lastRole = "user"
+                            }
+                        }
+
+                        if let timestampDate {
+                            lastUserMessageAt = timestampDate
+                            lastTaskSignalAt = timestampDate
+                        }
+                        if let timestamp {
+                            lastActivityAt = timestamp
+                        }
+                    case "task_started":
+                        if let timestampDate {
+                            lastTaskStartedAt = timestampDate
+                            lastTaskSignalAt = timestampDate
+                        }
+                        if let timestamp {
+                            lastActivityAt = timestamp
+                        }
+                    case "agent_reasoning", "agent_message":
+                        if let timestampDate {
+                            lastTaskSignalAt = timestampDate
+                        }
+                        if let timestamp {
+                            lastActivityAt = timestamp
+                        }
+                    case "task_complete":
+                        if let timestampDate {
+                            lastTaskCompleteAt = timestampDate
+                        }
+                        if let timestamp {
+                            lastActivityAt = timestamp
+                        }
+                    default:
+                        break
                     }
                 }
             default:
                 continue
             }
+        }
+
+        let pendingTrigger = [lastTaskStartedAt, lastUserMessageAt].compactMap { $0 }.max()
+        let hasPendingTask: Bool
+        if let pendingTrigger {
+            hasPendingTask = isDate(pendingTrigger, newerThan: lastTaskCompleteAt)
+        } else if let lastTaskSignalAt {
+            hasPendingTask = isDate(lastTaskSignalAt, newerThan: lastTaskCompleteAt)
+        } else {
+            hasPendingTask = false
         }
 
         let cwd = selectBestCodexCWD(cwdTurn: cwdTurn, cwdEnv: cwdEnv, cwdMeta: cwdMeta)
@@ -346,7 +415,9 @@ final class CodexSessionDetector: AgentSessionDetecting {
             sessionID: sessionID,
             lastMessage: lastMessage,
             lastRole: lastRole,
-            lastActivityAt: lastActivityAt
+            lastActivityAt: lastActivityAt,
+            hasPendingTask: hasPendingTask,
+            lastTaskSignalAt: lastTaskSignalAt
         )
     }
 
@@ -355,15 +426,21 @@ final class CodexSessionDetector: AgentSessionDetecting {
             return nil
         }
 
+        var chunks: [String] = []
         for item in content {
             guard let dict = item as? [String: Any] else { continue }
             let type = dict["type"] as? String ?? ""
             if (type == "output_text" || type == "input_text"),
-               let text = dict["text"] as? String {
-                return text
+               let text = dict["text"] as? String,
+               !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                chunks.append(text)
             }
         }
-        return nil
+
+        guard !chunks.isEmpty else {
+            return nil
+        }
+        return chunks.joined(separator: "\n")
     }
 
     private func normalizeCodexMessage(_ text: String) -> String? {
@@ -372,7 +449,7 @@ final class CodexSessionDetector: AgentSessionDetecting {
             return nil
         }
 
-        return SessionParsingSupport.truncate(trimmed, maxChars: 200)
+        return SessionParsingSupport.truncate(trimmed, maxChars: 5000)
     }
 
     private func extractCWDFromEnvironmentContext(_ text: String) -> String? {
@@ -414,7 +491,9 @@ final class CodexSessionDetector: AgentSessionDetecting {
         let status = determineCodexStatus(
             cpuUsage: process.cpuUsage,
             lastRole: file.lastRole,
-            modified: file.modified
+            modified: file.modified,
+            hasPendingTask: file.hasPendingTask,
+            lastTaskSignalAt: file.lastTaskSignalAt
         )
 
         let lastActivityAt = file.lastActivityAt ?? SessionParsingSupport.formatISODate(file.modified)
@@ -454,12 +533,27 @@ final class CodexSessionDetector: AgentSessionDetecting {
         )
     }
 
-    private func determineCodexStatus(cpuUsage: Double, lastRole: String?, modified: Date) -> SessionStatus {
+    private func determineCodexStatus(
+        cpuUsage: Double,
+        lastRole: String?,
+        modified: Date,
+        hasPendingTask: Bool,
+        lastTaskSignalAt: Date?
+    ) -> SessionStatus {
+        if hasPendingTask {
+            let referenceDate = lastTaskSignalAt ?? modified
+            if Date().timeIntervalSince(referenceDate) <= 3 * 60 {
+                return .processing
+            }
+        }
+
         var status: SessionStatus
         if cpuUsage > 15 {
             status = .processing
         } else if lastRole == "user" {
-            status = .processing
+            let referenceDate = lastTaskSignalAt ?? modified
+            let recentUserPrompt = Date().timeIntervalSince(referenceDate) <= 60
+            status = recentUserPrompt ? .processing : .waiting
         } else {
             status = .waiting
         }
@@ -477,6 +571,13 @@ final class CodexSessionDetector: AgentSessionDetecting {
         }
 
         return .waiting
+    }
+
+    private func isDate(_ candidate: Date, newerThan baseline: Date?) -> Bool {
+        guard let baseline else {
+            return true
+        }
+        return candidate > baseline
     }
 
     private func isBackgroundSession(projectPath: String, lastMessage: String?, cpuUsage: Double) -> Bool {

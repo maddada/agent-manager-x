@@ -24,6 +24,8 @@ struct ClaudeMessageData {
     let hasToolResult: Bool
     let isLocalCommand: Bool
     let isInterrupted: Bool
+    let hasPendingTask: Bool
+    let lastTaskSignalAt: String?
 }
 
 struct CodexSessionFile {
@@ -34,6 +36,8 @@ struct CodexSessionFile {
     let lastMessage: String?
     let lastRole: String?
     let lastActivityAt: String?
+    let hasPendingTask: Bool
+    let lastTaskSignalAt: Date?
 }
 
 struct OpenCodeProject: Decodable {
@@ -325,7 +329,7 @@ enum SessionParsingSupport {
         let lines = parseJSONLines(url: url)
         guard !lines.isEmpty else { return nil }
 
-        let recent = Array(lines.suffix(100))
+        let recent = Array(lines.suffix(250))
 
         var sessionID: String?
         var gitBranch: String?
@@ -340,6 +344,62 @@ enum SessionParsingSupport {
 
         var lastMessage: String?
         var lastUserMessage: String?
+        var lastTaskStartedAt: Date?
+        var lastTaskCompletedAt: Date?
+        var lastTaskSignalAt: Date?
+        var lastTaskSignalTimestamp: String?
+
+        for entry in recent {
+            let type = (entry["type"] as? String)?.lowercased() ?? ""
+            let timestamp = entry["timestamp"] as? String
+            let timestampDate = parseISODate(timestamp)
+
+            func markSignal() {
+                guard let timestampDate else { return }
+                lastTaskSignalAt = timestampDate
+                if let timestamp {
+                    lastTaskSignalTimestamp = timestamp
+                }
+            }
+
+            switch type {
+            case "user":
+                if let messageBody = entry["message"] as? [String: Any],
+                   let content = messageBody["content"] {
+                    // User tool_result lines are intermediate task activity, not a new prompt.
+                    if hasBlock(ofType: "tool_result", in: content) {
+                        markSignal()
+                    } else if let timestampDate {
+                        lastTaskStartedAt = timestampDate
+                        markSignal()
+                    }
+                }
+            case "assistant":
+                if let messageBody = entry["message"] as? [String: Any],
+                   let content = messageBody["content"] {
+                    if hasBlock(ofType: "thinking", in: content) || hasBlock(ofType: "tool_use", in: content) {
+                        markSignal()
+                    }
+
+                    if let text = extractText(from: content),
+                       !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                       !shouldSuppressPreviewMessage(text),
+                       let timestampDate {
+                        lastTaskCompletedAt = timestampDate
+                    }
+                }
+            case "progress":
+                markSignal()
+            case "system":
+                if let subtype = (entry["subtype"] as? String)?.lowercased(),
+                   (subtype.contains("stop") || subtype.contains("complete")),
+                   let timestampDate {
+                    lastTaskCompletedAt = timestampDate
+                }
+            default:
+                continue
+            }
+        }
 
         for message in recent.reversed() {
             if sessionID == nil {
@@ -379,6 +439,13 @@ enum SessionParsingSupport {
             }
         }
 
+        let hasPendingTask: Bool
+        if let lastTaskStartedAt {
+            hasPendingTask = isDate(lastTaskStartedAt, newerThan: lastTaskCompletedAt)
+        } else {
+            hasPendingTask = false
+        }
+
         return ClaudeMessageData(
             sessionID: sessionID,
             gitBranch: gitBranch,
@@ -390,8 +457,17 @@ enum SessionParsingSupport {
             hasToolUse: hasToolUse,
             hasToolResult: hasToolResult,
             isLocalCommand: isLocalCommand,
-            isInterrupted: isInterrupted
+            isInterrupted: isInterrupted,
+            hasPendingTask: hasPendingTask,
+            lastTaskSignalAt: lastTaskSignalTimestamp
         )
+    }
+
+    private static func isDate(_ candidate: Date, newerThan baseline: Date?) -> Bool {
+        guard let baseline else {
+            return true
+        }
+        return candidate > baseline
     }
 
     static func determineClaudeStatus(
