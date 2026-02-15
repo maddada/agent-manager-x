@@ -121,7 +121,7 @@ private struct AppHeaderView: View {
                     .buttonStyle(.borderless)
                     .focusable(false)
                     .pointerCursor()
-                    .help("Background sessions")
+                    .hoverPopover("Background sessions")
                     .popover(isPresented: $showBackgroundPanel, arrowEdge: .bottom) {
                         BackgroundSessionsPanel()
                             .environmentObject(store)
@@ -142,7 +142,7 @@ private struct AppHeaderView: View {
                     .buttonStyle(.borderless)
                     .focusable(false)
                     .pointerCursor()
-                    .help("Kill idle sessions")
+                    .hoverPopover("Kill idle sessions")
                 }
 
                 if store.staleCount() > 0 {
@@ -157,7 +157,7 @@ private struct AppHeaderView: View {
                     .buttonStyle(.borderless)
                     .focusable(false)
                     .pointerCursor()
-                    .help("Kill stale sessions")
+                    .hoverPopover("Kill stale sessions")
                 }
 
                 ForEach(agentTypeOrder, id: \.rawValue) { type in
@@ -174,7 +174,7 @@ private struct AppHeaderView: View {
                         .buttonStyle(.borderless)
                         .focusable(false)
                         .pointerCursor()
-                        .help("Kill all \(type.rawValue) sessions")
+                        .hoverPopover("Kill all \(type.rawValue) sessions")
                     }
                 }
 
@@ -188,7 +188,7 @@ private struct AppHeaderView: View {
                     .focusable(false)
                     .disabled(store.notificationState.isLoading)
                     .pointerCursor()
-                    .help(store.notificationState.bellModeEnabled ? "Bell mode currently enabled!" : "Voice mode currently enabled!")
+                    .hoverPopover(store.notificationState.bellModeEnabled ? "Bell mode currently active!" : "Voice mode currently active!")
                 }
 
                 Button {
@@ -200,7 +200,7 @@ private struct AppHeaderView: View {
                 .buttonStyle(.borderless)
                 .focusable(false)
                 .pointerCursor()
-                .help(store.displayMode == .list ? "Switch to grid" : "Switch to list")
+                .hoverPopover(store.displayMode == .list ? "Switch to grid" : "Switch to list")
 
                 Button {
                     store.showSettings()
@@ -210,7 +210,7 @@ private struct AppHeaderView: View {
                 .buttonStyle(.borderless)
                 .focusable(false)
                 .pointerCursor()
-                .help("Settings")
+                .hoverPopover("Settings")
 
                 Button {
                     store.refresh(showInitialLoading: true)
@@ -226,7 +226,7 @@ private struct AppHeaderView: View {
                 .buttonStyle(.borderless)
                 .focusable(false)
                 .pointerCursor()
-                .help("Refresh")
+                .hoverPopover("Refresh")
             }
             .fixedSize(horizontal: true, vertical: false)
             .layoutPriority(1)
@@ -607,7 +607,7 @@ private struct ProjectGroupHeaderView: View {
                                         .font(store.mainAppUIElementSize.projectHeaderShortcutFont)
                                         .foregroundStyle(.secondary)
                                         .opacity(0.28)
-                                        .help("Shortcut: Cmd+\(shortcutNumber)")
+                                        .hoverPopover("Shortcut: Cmd+\(shortcutNumber)")
                                 } else {
                                     Text("\(shortcutNumber)")
                                         .font(store.mainAppUIElementSize.projectHeaderShortcutFont)
@@ -659,7 +659,7 @@ private struct ProjectGroupHeaderView: View {
                 .buttonStyle(.plain)
                 .focusable(false)
                 .hoverPointerCursor()
-                .help("Open project")
+                .hoverPopover("Open project")
                 .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
                 .layoutPriority(0)
 
@@ -688,7 +688,7 @@ private struct ProjectGroupHeaderView: View {
             .buttonStyle(.plain)
             .focusable(false)
             .hoverPointerCursor()
-            .help("Kill all sessions in project")
+            .hoverPopover("Kill all sessions in project")
             .offset(x: -8, y: -8)
             .opacity(isHoveringHeader ? 1 : 0)
             .allowsHitTesting(isHoveringHeader)
@@ -917,7 +917,7 @@ private struct SessionCardView: View {
                             .foregroundStyle(.tertiary)
                             .lineLimit(1)
                             .truncationMode(.head)
-                            .help(filePath)
+                            .hoverPopover(filePath)
                             .onTapGesture {
                                 NSPasteboard.general.clearContents()
                                 NSPasteboard.general.setString(filePath, forType: .string)
@@ -984,7 +984,7 @@ private struct SessionCardView: View {
             .offset(x: -8, y: -8)
             .opacity(isHoveringCard ? 1 : 0)
             .allowsHitTesting(isHoveringCard)
-            .help("Kill session")
+            .hoverPopover("Kill session")
 
             if !customURL.isEmpty {
                 Button {
@@ -998,7 +998,7 @@ private struct SessionCardView: View {
                 .buttonStyle(.plain)
                 .focusable(false)
                 .offset(x: compact ? 6 : 10, y: compact ? 72 : 96)
-                .help(customURL)
+                .hoverPopover(customURL)
             }
 
         }
@@ -1181,6 +1181,47 @@ extension View {
 
     func hoverPointerCursor() -> some View {
         modifier(HoverPointerCursorModifier())
+    }
+
+    func hoverPopover(_ text: String) -> some View {
+        modifier(HoverPopoverModifier(text: text))
+    }
+}
+
+private struct HoverPopoverModifier: ViewModifier {
+    let text: String
+    @State private var isHovered = false
+    @State private var isPresented = false
+    @State private var showTask: DispatchWorkItem?
+    @State private var hideTask: DispatchWorkItem?
+
+    func body(content: Content) -> some View {
+        content
+            .onHover { hovering in
+                isHovered = hovering
+                if hovering {
+                    hideTask?.cancel()
+                    let task = DispatchWorkItem {
+                        if isHovered { isPresented = true }
+                    }
+                    showTask = task
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: task)
+                } else {
+                    showTask?.cancel()
+                    let task = DispatchWorkItem {
+                        isPresented = false
+                    }
+                    hideTask = task
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.15, execute: task)
+                }
+            }
+            .popover(isPresented: $isPresented, arrowEdge: .bottom) {
+                Text(text)
+                    .font(.caption)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
     }
 }
 
