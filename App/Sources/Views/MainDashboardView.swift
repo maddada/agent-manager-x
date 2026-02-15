@@ -188,7 +188,7 @@ private struct AppHeaderView: View {
                     .focusable(false)
                     .disabled(store.notificationState.isLoading)
                     .pointerCursor()
-                    .help(store.notificationState.bellModeEnabled ? "Bell mode" : "Voice mode")
+                    .help(store.notificationState.bellModeEnabled ? "Bell mode currently enabled!" : "Voice mode currently enabled!")
                 }
 
                 Button {
@@ -278,7 +278,7 @@ private struct BackgroundSessionsPanel: View {
                 }
                 .mainAppScrollbarStyle(for: store.mainAppUIElementSize)
             }
-            .frame(maxHeight: 220)
+            .frame(maxHeight: 600)
 
             Button("Close All", role: .destructive) {
                 store.killAllBackgroundSessions()
@@ -604,13 +604,13 @@ private struct ProjectGroupHeaderView: View {
                             if let shortcutNumber {
                                 if shortcutNumber <= 9 {
                                     Text("⌘\(shortcutNumber)")
-                                        .font(store.mainAppUIElementSize.projectHeaderTitleFont)
+                                        .font(store.mainAppUIElementSize.projectHeaderShortcutFont)
                                         .foregroundStyle(.secondary)
                                         .opacity(0.28)
                                         .help("Shortcut: Cmd+\(shortcutNumber)")
                                 } else {
                                     Text("\(shortcutNumber)")
-                                        .font(store.mainAppUIElementSize.projectHeaderTitleFont)
+                                        .font(store.mainAppUIElementSize.projectHeaderShortcutFont)
                                         .foregroundStyle(.secondary)
                                         .opacity(0.28)
                                 }
@@ -768,11 +768,26 @@ private struct SessionCardView: View {
         store.customURL(for: session.id)
     }
 
+    private var isNewSession: Bool {
+        let hasMessage = session.lastMessage.map { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty } ?? false
+        return !hasMessage && (session.status == .waiting || session.status == .idle)
+    }
+
     private var statusStyle: SessionStatusStyle {
-        SessionStatusStyle.from(status: session.status)
+        if isNewSession {
+            return SessionStatusStyle(
+                label: "New session",
+                accent: .gray,
+                badgeBackground: .gray.opacity(0.25),
+                cardBackground: .gray.opacity(0.08),
+                cardBorder: .gray.opacity(0.18)
+            )
+        }
+        return SessionStatusStyle.from(status: session.status)
     }
 
     private var previewText: String {
+        if isNewSession { return "No messages sent yet" }
         let fallback = session.status == .idle || session.status == .stale ? "No recent messages" : statusStyle.label
         guard let message = session.lastMessage,
               !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
@@ -792,7 +807,7 @@ private struct SessionCardView: View {
     }
 
     private var messagePopoverSize: CGSize {
-        compact ? CGSize(width: 430, height: 320) : CGSize(width: 520, height: 360)
+        compact ? CGSize(width: 430, height: 400) : CGSize(width: 520, height: 460)
     }
 
     private func scheduleMessagePopoverShow() {
@@ -851,6 +866,31 @@ private struct SessionCardView: View {
         compact ? 6 : 8
     }
 
+    @ViewBuilder
+    private var messagePopoverContent: some View {
+        if let fullMessage {
+            ScrollView(.vertical, showsIndicators: true) {
+                Text(fullMessage)
+                    .font(.body)
+                    .foregroundStyle(.primary)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(14)
+            }
+            .mainAppScrollbarStyle(for: store.mainAppUIElementSize)
+            .frame(maxHeight: messagePopoverSize.height)
+            .frame(width: messagePopoverSize.width)
+            .onHover { hovering in
+                isMessagePopoverHovered = hovering
+                if hovering {
+                    hideMessagePopoverTask?.cancel()
+                } else {
+                    scheduleMessagePopoverHide()
+                }
+            }
+        }
+    }
+
     var body: some View {
         ZStack(alignment: .topLeading) {
             VStack(alignment: .leading, spacing: 0) {
@@ -869,6 +909,20 @@ private struct SessionCardView: View {
                             .lineLimit(1)
                             .truncationMode(.tail)
                             .frame(minWidth: 0, alignment: .leading)
+                    }
+
+                    if store.showSessionFilePath, let filePath = session.sessionFilePath {
+                        Text(filePath)
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                            .lineLimit(1)
+                            .truncationMode(.head)
+                            .help(filePath)
+                            .onTapGesture {
+                                NSPasteboard.general.clearContents()
+                                NSPasteboard.general.setString(filePath, forType: .string)
+                            }
+                            .pointerCursor()
                     }
 
                     Spacer(minLength: 8)
@@ -891,6 +945,9 @@ private struct SessionCardView: View {
                         } else {
                             scheduleMessagePopoverHide()
                         }
+                    }
+                    .popover(isPresented: $isMessagePopoverPresented, arrowEdge: .bottom) {
+                        messagePopoverContent
                     }
 
                 Text(metricsLine)
@@ -961,56 +1018,6 @@ private struct SessionCardView: View {
         .onMiddleClick(perform: {
             store.killSession(session)
         })
-        .overlay(alignment: .top) {
-            if isMessagePopoverPresented, let fullMessage {
-                ViewThatFits(in: .vertical) {
-                    Text(fullMessage)
-                        .font(.body)
-                        .foregroundStyle(.primary)
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(14)
-
-                    ScrollView(.vertical, showsIndicators: true) {
-                        Text(fullMessage)
-                            .font(.body)
-                            .foregroundStyle(.primary)
-                            .textSelection(.enabled)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(14)
-                    }
-                    .mainAppScrollbarStyle(for: store.mainAppUIElementSize)
-                }
-                .frame(maxHeight: messagePopoverSize.height)
-                .frame(width: messagePopoverSize.width)
-                .background(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(Color(nsColor: .windowBackgroundColor))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(Color.primary.opacity(0.24), lineWidth: 1)
-                )
-                .shadow(color: .black.opacity(0.28), radius: 12, x: 0, y: 4)
-                .offset(y: compact ? 62 : 92)
-                .zIndex(3000)
-                .onTapGesture {
-                    showMessagePopoverTask?.cancel()
-                    hideMessagePopoverTask?.cancel()
-                    isMessagePopoverPresented = false
-                    isMessagePopoverHovered = false
-                    isMessagePreviewHovered = false
-                }
-                .onHover { hovering in
-                    isMessagePopoverHovered = hovering
-                    if hovering {
-                        hideMessagePopoverTask?.cancel()
-                    } else {
-                        scheduleMessagePopoverHide()
-                    }
-                }
-            }
-        }
         .zIndex(isMessagePopoverPresented ? 20_000 : 0)
         .onDisappear {
             showMessagePopoverTask?.cancel()
@@ -1589,6 +1596,19 @@ private extension UIElementSize {
             return .title3
         case .extraLarge:
             return .title2
+        }
+    }
+
+    var projectHeaderShortcutFont: Font {
+        switch self {
+        case .small:
+            return .headline
+        case .medium:
+            return .title3
+        case .large:
+            return .title2
+        case .extraLarge:
+            return .title
         }
     }
 

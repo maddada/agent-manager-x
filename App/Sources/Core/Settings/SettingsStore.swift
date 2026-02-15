@@ -150,6 +150,16 @@ final class SettingsStore {
         set { defaults.set(newValue.rawValue, forKey: SettingsKeys.notificationSound) }
     }
 
+    var showSessionFilePath: Bool {
+        get {
+            guard defaults.object(forKey: SettingsKeys.showSessionFilePath) != nil else {
+                return false
+            }
+            return defaults.bool(forKey: SettingsKeys.showSessionFilePath)
+        }
+        set { defaults.set(newValue, forKey: SettingsKeys.showSessionFilePath) }
+    }
+
     func projectCommand(for projectPath: String, action: ProjectCommandAction) -> String {
         readProjectCommandsStore()[projectPath]?[action.rawValue]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
     }

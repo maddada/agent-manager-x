@@ -23,4 +23,5 @@ enum SettingsKeys {
     static let projectCommands = "agent-manager-x-project-commands"
     static let customNames = "agent-manager-x-custom-names"
     static let customURLs = "agent-manager-x-custom-urls"
+    static let showSessionFilePath = "agent-manager-x-show-session-file-path"
 }

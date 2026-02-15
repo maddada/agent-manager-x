@@ -45,6 +45,7 @@ struct SettingsSheetView: View {
                             clickActionRow
                             editorRows
                             terminalRows
+                            sessionFilePathToggle
                         }
 
                         settingsDivider
@@ -259,6 +260,14 @@ struct SettingsSheetView: View {
                 .textFieldStyle(.roundedBorder)
             }
         }
+    }
+
+    private var sessionFilePathToggle: some View {
+        Toggle("Show session file path on cards", isOn: Binding(
+            get: { store.showSessionFilePath },
+            set: { store.updateShowSessionFilePath($0) }
+        ))
+        .font(.callout)
     }
 
     // MARK: - Hotkeys

@@ -38,6 +38,7 @@ final class AppStore: ObservableObject {
     @Published var mainAppUIElementSize: UIElementSize
     @Published var miniViewerUIElementSize: UIElementSize
     @Published var notificationSound: NotificationSound
+    @Published var showSessionFilePath: Bool
 
     @Published private(set) var notificationState = NotificationState()
     @Published private(set) var gitDiffStatsByProjectPath: [String: GitDiffStats] = [:]
@@ -109,6 +110,7 @@ final class AppStore: ObservableObject {
         mainAppUIElementSize = settings.mainAppUIElementSize
         miniViewerUIElementSize = settings.miniViewerUIElementSize
         notificationSound = settings.notificationSound
+        showSessionFilePath = settings.showSessionFilePath
     }
 
     func start() {
@@ -533,6 +535,11 @@ final class AppStore: ObservableObject {
     func updateMiniViewerShowOnStart(_ enabled: Bool) {
         miniViewerShowOnStart = enabled
         settings.miniViewerShowOnStart = enabled
+    }
+
+    func updateShowSessionFilePath(_ enabled: Bool) {
+        showSessionFilePath = enabled
+        settings.showSessionFilePath = enabled
     }
 
     func updateMainAppUIElementSize(_ value: UIElementSize) {

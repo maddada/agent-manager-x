@@ -356,7 +356,7 @@ private struct SessionRowView: View {
     }
 
     private var messagePopoverHeight: CGFloat {
-        180 * chromeScale
+        240 * chromeScale
     }
 
     private var popoverYOffset: CGFloat {
@@ -366,11 +366,40 @@ private struct SessionRowView: View {
         return 44 * chromeScale
     }
 
+    @ViewBuilder
+    private var messagePopoverContent: some View {
+        if let fullMessage {
+            ScrollView(.vertical, showsIndicators: true) {
+                Text(fullMessage)
+                    .miniViewerFont(size: 13)
+                    .foregroundStyle(.primary)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(14 * chromeScale)
+            }
+            .frame(maxHeight: messagePopoverHeight)
+            .frame(width: messagePopoverWidth)
+            .onHover { hovering in
+                isMessagePopoverHovered = hovering
+                if hovering {
+                    hideMessagePopoverTask?.cancel()
+                } else {
+                    scheduleMessagePopoverHide()
+                }
+            }
+        }
+    }
+
     private var rowHeight: CGFloat {
         56 * chromeScale
     }
 
+    private var isNewSession: Bool {
+        fullMessage == nil && (session.status == .waiting || session.status == .idle)
+    }
+
     private var statusLabel: String {
+        if isNewSession { return "New session" }
         switch session.status {
         case .waiting:
             return "Waiting"
@@ -386,6 +415,7 @@ private struct SessionRowView: View {
     }
 
     private var baseTint: Color {
+        if isNewSession { return .gray }
         switch session.status {
         case .waiting:
             return .blue.opacity(0.6)
@@ -422,12 +452,12 @@ private struct SessionRowView: View {
     private var statLine: String {
         let memoryMB = Double(session.memoryBytes) / (1024.0 * 1024.0)
         let memoryText = memoryMB >= 1024 ? String(format: "%.1fG", memoryMB / 1024.0) : "\(Int(memoryMB.rounded()))M"
-        return "PID \(session.pid)  \(Int(session.cpuUsage.rounded()))%  \(memoryText)"
+        return "\(Int(session.cpuUsage.rounded()))%  \(memoryText)"
     }
 
     private var messageLine: String {
         guard let fullMessage else {
-            return "No session message yet"
+            return "No messages sent yet"
         }
 
         // Normalize multi-line content so stale sessions with newline-prefixed messages
@@ -499,12 +529,15 @@ private struct SessionRowView: View {
 
     @ViewBuilder
     private var largeStatusIndicator: some View {
-        switch session.status {
-        case .waiting:
+        if isNewSession {
+            Image(systemName: "plus")
+                .miniViewerFont(size: 14, weight: .bold)
+                .foregroundStyle(.secondary)
+        } else if session.status == .waiting {
             Image(systemName: "exclamationmark.triangle.fill")
                 .miniViewerFont(size: 14, weight: .bold)
                 .foregroundStyle(.yellow)
-        case .processing, .thinking:
+        } else if session.status == .processing || session.status == .thinking {
             Image(systemName: "arrow.triangle.2.circlepath")
                 .miniViewerFont(size: 14, weight: .bold)
                 .foregroundStyle(.blue)
@@ -519,7 +552,7 @@ private struct SessionRowView: View {
                 .onDisappear {
                     isLoadingSpinActive = false
                 }
-        case .idle, .stale:
+        } else {
             Image(systemName: "pause.fill")
                 .miniViewerFont(size: 14, weight: .bold)
                 .foregroundStyle(.secondary)
@@ -589,6 +622,9 @@ private struct SessionRowView: View {
                         Spacer(minLength: 0)
                     }
                     .contentShape(Rectangle())
+                    .popover(isPresented: $isMessagePopoverPresented, arrowEdge: .bottom) {
+                        messagePopoverContent
+                    }
 
                     HStack(spacing: 7 * chromeScale) {
                         Text(lastActivityText)
@@ -632,40 +668,6 @@ private struct SessionRowView: View {
             }
         }
         .animation(.easeInOut(duration: 0.16), value: isExpanded)
-        .overlay(alignment: .top) {
-            if showDetails, isMessagePopoverPresented, let fullMessage {
-                ScrollView(.vertical, showsIndicators: true) {
-                    Text(fullMessage)
-                        .miniViewerFont(size: 13)
-                        .foregroundStyle(.primary)
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(14 * chromeScale)
-                }
-                .frame(width: messagePopoverWidth, height: messagePopoverHeight)
-                .background(
-                    RoundedRectangle(cornerRadius: 12 * chromeScale, style: .continuous)
-                        .fill(.ultraThinMaterial)
-                )
-                .offset(y: popoverYOffset)
-                .zIndex(5000)
-                .onTapGesture {
-                    showMessagePopoverTask?.cancel()
-                    hideMessagePopoverTask?.cancel()
-                    isMessagePopoverPresented = false
-                    isMessagePopoverHovered = false
-                    isRowHovered = false
-                }
-                .onHover { hovering in
-                    isMessagePopoverHovered = hovering
-                    if hovering {
-                        hideMessagePopoverTask?.cancel()
-                    } else {
-                        scheduleMessagePopoverHide()
-                    }
-                }
-            }
-        }
         .onChange(of: showDetails) { _, detailsVisible in
             if !detailsVisible {
                 showMessagePopoverTask?.cancel()
