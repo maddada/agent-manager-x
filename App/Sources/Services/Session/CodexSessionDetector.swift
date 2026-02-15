@@ -52,11 +52,6 @@ final class CodexSessionDetector: AgentSessionDetecting {
             }
         }
 
-        let fallbackIndices = sessionFiles.indices.sorted { lhs, rhs in
-            sessionFiles[lhs].modified > sessionFiles[rhs].modified
-        }
-
-        var fallbackCursor = 0
         var usedIndices: Set<Int> = []
 
         for process in unresolvedProcesses {
@@ -67,22 +62,18 @@ final class CodexSessionDetector: AgentSessionDetecting {
                 while let idx = queue.first {
                     queue.removeFirst()
                     if !usedIndices.contains(idx) {
+                        // Only match files modified after this process started.
+                        if let startDate = process.startDate {
+                            let cutoff = startDate.addingTimeInterval(-5)
+                            if sessionFiles[idx].modified < cutoff {
+                                continue
+                            }
+                        }
                         assignedIndex = idx
                         break
                     }
                 }
                 filesByCWD[cwd] = queue
-            }
-
-            if assignedIndex == nil {
-                while fallbackCursor < fallbackIndices.count {
-                    let idx = fallbackIndices[fallbackCursor]
-                    fallbackCursor += 1
-                    if !usedIndices.contains(idx) {
-                        assignedIndex = idx
-                        break
-                    }
-                }
             }
 
             if let index = assignedIndex {
@@ -136,7 +127,8 @@ final class CodexSessionDetector: AgentSessionDetecting {
                 processGroupID: snapshot.processGroupID,
                 commandLine: snapshot.commandLine,
                 activeSessionFile: activeSessionFile,
-                dataHome: dataHome
+                dataHome: dataHome,
+                startDate: SessionParsingSupport.processStartDate(elapsed: snapshot.elapsed)
             )
         }
     }
@@ -547,7 +539,8 @@ final class CodexSessionDetector: AgentSessionDetecting {
             cpuUsage: process.cpuUsage,
             memoryBytes: process.memoryBytes,
             activeSubagentCount: 0,
-            isBackground: isBackground
+            isBackground: isBackground,
+            sessionFilePath: file.path
         )
     }
 

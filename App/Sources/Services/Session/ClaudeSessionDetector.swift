@@ -78,14 +78,15 @@ final class ClaudeSessionDetector: AgentSessionDetecting {
                     }
 
                     let jsonlFiles = recentProjectJSONLFiles(in: projectDirectory)
-                    for (index, process) in projectProcesses.enumerated() {
+                    var claimedFiles: Set<String> = []
+                    for process in projectProcesses {
                         let projectPath = process.cwd ?? SessionParsingSupport.convertClaudeDirectoryNameToPath(dirName)
                         if let session = findSessionForProcess(
                             files: jsonlFiles,
                             projectDirectory: projectDirectory,
                             projectPath: projectPath,
                             process: process,
-                            index: index
+                            claimedFiles: &claimedFiles
                         ) {
                             sessions.append(session)
                             matchedPIDs.insert(process.pid)
@@ -145,7 +146,8 @@ final class ClaudeSessionDetector: AgentSessionDetecting {
                 processGroupID: snapshot.processGroupID,
                 commandLine: snapshot.commandLine,
                 activeSessionFile: activeFile,
-                dataHome: nil
+                dataHome: nil,
+                startDate: SessionParsingSupport.processStartDate(elapsed: snapshot.elapsed)
             )
         }
     }
@@ -155,20 +157,37 @@ final class ClaudeSessionDetector: AgentSessionDetecting {
         projectDirectory: URL,
         projectPath: String,
         process: AgentProcess,
-        index: Int
+        claimedFiles: inout Set<String>
     ) -> Session? {
-        guard let primaryFile = files[safe: index],
+        // Only consider files that:
+        // 1. Were modified after this process started (avoid stale files)
+        // 2. Haven't been claimed by another process already
+        let candidateFiles: [String]
+        if let startDate = process.startDate {
+            let tolerance: TimeInterval = 5
+            let cutoff = startDate.addingTimeInterval(-tolerance)
+            candidateFiles = files.filter { path in
+                !claimedFiles.contains(path)
+                    && SessionParsingSupport.modifiedDate(for: path) >= cutoff
+            }
+        } else {
+            candidateFiles = files.filter { !claimedFiles.contains($0) }
+        }
+
+        guard let primaryFile = candidateFiles.first,
               var session = parseClaudeSessionFile(at: primaryFile, projectPath: projectPath, process: process)
         else {
             return nil
         }
+
+        claimedFiles.insert(primaryFile)
 
         session = withSubagentCount(session, projectDirectory: projectDirectory)
 
         let now = Date()
         let recentThreshold: TimeInterval = 10
 
-        for candidate in files where candidate != primaryFile {
+        for candidate in candidateFiles where candidate != primaryFile {
             let modified = SessionParsingSupport.modifiedDate(for: candidate)
             if now.timeIntervalSince(modified) > recentThreshold {
                 continue
@@ -198,7 +217,8 @@ final class ClaudeSessionDetector: AgentSessionDetecting {
                     cpuUsage: session.cpuUsage,
                     memoryBytes: session.memoryBytes,
                     activeSubagentCount: session.activeSubagentCount,
-                    isBackground: false
+                    isBackground: false,
+                    sessionFilePath: session.sessionFilePath
                 )
             }
         }
@@ -222,7 +242,8 @@ final class ClaudeSessionDetector: AgentSessionDetecting {
                 cpuUsage: session.cpuUsage,
                 memoryBytes: session.memoryBytes,
                 activeSubagentCount: session.activeSubagentCount,
-                isBackground: false
+                isBackground: false,
+                sessionFilePath: session.sessionFilePath
             )
         }
 
@@ -294,7 +315,8 @@ final class ClaudeSessionDetector: AgentSessionDetecting {
             cpuUsage: process.cpuUsage,
             memoryBytes: process.memoryBytes,
             activeSubagentCount: 0,
-            isBackground: false
+            isBackground: false,
+            sessionFilePath: path
         )
     }
 
@@ -362,27 +384,6 @@ final class ClaudeSessionDetector: AgentSessionDetecting {
         }
 
         return nil
-    }
-
-    private func recentProjectJSONLFiles(in projectDirectory: URL) -> [String] {
-        guard let entries = try? FileManager.default.contentsOfDirectory(
-            at: projectDirectory,
-            includingPropertiesForKeys: [.contentModificationDateKey],
-            options: [.skipsHiddenFiles]
-        ) else {
-            return []
-        }
-
-        return entries
-            .filter {
-                $0.pathExtension == "jsonl" && !$0.lastPathComponent.hasPrefix("agent-")
-            }
-            .sorted { lhs, rhs in
-                let lhsDate = (try? lhs.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
-                let rhsDate = (try? rhs.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
-                return lhsDate > rhsDate
-            }
-            .map(\.path)
     }
 
     private func buildFallbackSession(process: AgentProcess) -> Session {
@@ -477,6 +478,27 @@ final class ClaudeSessionDetector: AgentSessionDetecting {
         return .waiting
     }
 
+    private func recentProjectJSONLFiles(in projectDirectory: URL) -> [String] {
+        guard let entries = try? FileManager.default.contentsOfDirectory(
+            at: projectDirectory,
+            includingPropertiesForKeys: [.contentModificationDateKey],
+            options: [.skipsHiddenFiles]
+        ) else {
+            return []
+        }
+
+        return entries
+            .filter {
+                $0.pathExtension == "jsonl" && !$0.lastPathComponent.hasPrefix("agent-")
+            }
+            .sorted { lhs, rhs in
+                let lhsDate = (try? lhs.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
+                let rhsDate = (try? rhs.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
+                return lhsDate > rhsDate
+            }
+            .map(\.path)
+    }
+
     private func claudeProjectRoots() -> [URL] {
         guard let home = FileManager.default.homeDirectoryForCurrentUser as URL? else {
             return []
@@ -540,12 +562,5 @@ final class ClaudeSessionDetector: AgentSessionDetecting {
         }
 
         return candidate.id > current.id
-    }
-}
-
-private extension Array {
-    subscript(safe index: Int) -> Element? {
-        guard indices.contains(index) else { return nil }
-        return self[index]
     }
 }

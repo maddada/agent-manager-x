@@ -33,7 +33,7 @@ final class OpenCodeSessionDetector: AgentSessionDetecting {
             }
 
             let projectPath = process.cwd?.isEmpty == false ? process.cwd! : openSession.directory
-            sessions.append(buildSession(storagePath: storagePath, openSession: openSession, process: process, projectPath: projectPath))
+            sessions.append(buildSession(storagePath: storagePath, openSession: openSession, process: process, projectPath: projectPath, filePath: activeFile))
             matchedPIDs.insert(process.pid)
         }
 
@@ -111,7 +111,8 @@ final class OpenCodeSessionDetector: AgentSessionDetecting {
                 processGroupID: snapshot.processGroupID,
                 commandLine: snapshot.commandLine,
                 activeSessionFile: activeFile,
-                dataHome: nil
+                dataHome: nil,
+                startDate: SessionParsingSupport.processStartDate(elapsed: snapshot.elapsed)
             )
         }
     }
@@ -201,7 +202,7 @@ final class OpenCodeSessionDetector: AgentSessionDetecting {
         return latest
     }
 
-    private func buildSession(storagePath: URL, openSession: OpenCodeSession, process: AgentProcess, projectPath: String) -> Session {
+    private func buildSession(storagePath: URL, openSession: OpenCodeSession, process: AgentProcess, projectPath: String, filePath: String? = nil) -> Session {
         let lastMessage = lastMessageForOpenCodeSession(storagePath: storagePath, sessionID: openSession.id)
 
         let status = determineOpenCodeStatus(
@@ -236,7 +237,8 @@ final class OpenCodeSessionDetector: AgentSessionDetecting {
             cpuUsage: process.cpuUsage,
             memoryBytes: process.memoryBytes,
             activeSubagentCount: 0,
-            isBackground: false
+            isBackground: false,
+            sessionFilePath: filePath
         )
     }
 

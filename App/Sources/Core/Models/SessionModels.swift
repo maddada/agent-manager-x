@@ -35,6 +35,7 @@ struct Session: Codable, Hashable, Identifiable {
     let memoryBytes: Int64
     let activeSubagentCount: Int
     let isBackground: Bool
+    var sessionFilePath: String? = nil
 
     /// Render-safe identity for UI lists where logical `id` may repeat across processes.
     var renderID: String {

@@ -10,6 +10,7 @@ struct AgentProcess {
     let commandLine: String
     let activeSessionFile: String?
     let dataHome: String?
+    let startDate: Date?
 }
 
 struct ClaudeMessageData {
@@ -678,6 +679,32 @@ enum SessionParsingSupport {
 
     static func modifiedDate(for path: String) -> Date {
         ((try? FileManager.default.attributesOfItem(atPath: path)[.modificationDate]) as? Date) ?? .distantPast
+    }
+
+    /// Parse ps `etime` field ([[dd-]hh:]mm:ss) into a start date.
+    static func processStartDate(elapsed: String, now: Date = Date()) -> Date? {
+        let trimmed = elapsed.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+
+        var days = 0
+        var remainder = trimmed
+
+        if let dashIndex = remainder.firstIndex(of: "-") {
+            days = Int(remainder[..<dashIndex]) ?? 0
+            remainder = String(remainder[remainder.index(after: dashIndex)...])
+        }
+
+        let parts = remainder.split(separator: ":").compactMap { Int($0) }
+        let seconds: Int
+        switch parts.count {
+        case 3: seconds = parts[0] * 3600 + parts[1] * 60 + parts[2]
+        case 2: seconds = parts[0] * 60 + parts[1]
+        case 1: seconds = parts[0]
+        default: return nil
+        }
+
+        let totalSeconds = TimeInterval(days * 86400 + seconds)
+        return now.addingTimeInterval(-totalSeconds)
     }
 }
 
