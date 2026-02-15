@@ -516,7 +516,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.madda.agentmanagerx;
 				PRODUCT_NAME = "Agent Manager X";
 				SDKROOT = macosx;
@@ -593,7 +593,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.madda.agentmanagerx;
 				PRODUCT_NAME = "Agent Manager X";
 				SDKROOT = macosx;
