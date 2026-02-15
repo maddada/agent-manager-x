@@ -7,50 +7,108 @@ struct SettingsSheetView: View {
     @State private var miniViewerHotkeyDraft = ""
     @State private var overlayColorDraft = ""
 
+    private var settingsScale: CGFloat {
+        store.mainAppUIElementSize.mainAppScale
+    }
+
     var body: some View {
-        VStack(spacing: 0) {
-            HStack {
-                Text("Settings")
-                    .font(.title3.weight(.semibold))
-                Spacer()
-                Button("Done") {
-                    store.hideSettings()
+        GeometryReader { proxy in
+            VStack(spacing: 0) {
+                // Header
+                HStack {
+                    Text("Settings")
+                        .font(.title2.weight(.bold))
+                    Spacer()
+                    Button("Done") {
+                        store.hideSettings()
+                    }
+                    .keyboardShortcut(.cancelAction)
+                    .focusable(false)
+                    .pointerCursor()
                 }
-                .keyboardShortcut(.cancelAction)
-                .focusable(false)
-                .pointerCursor()
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 14)
 
-            Divider()
+                Divider()
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    themeSection
-                    appearanceSection
-                    clickActionSection
-                    editorSection
-                    terminalSection
-                    hotkeysSection
-                    miniViewerSection
-                    notificationsSection
-                    messageSection
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
+                        settingsSection("Appearance") {
+                            themeRow
+                            backgroundRows
+                            uiSizeRow
+                        }
+
+                        settingsDivider
+
+                        settingsSection("Behavior") {
+                            clickActionRow
+                            editorRows
+                            terminalRows
+                        }
+
+                        settingsDivider
+
+                        settingsSection("Hotkeys") {
+                            globalHotkeyRow
+                            shortcutsReferenceRows
+                        }
+
+                        settingsDivider
+
+                        settingsSection("Mini Viewer") {
+                            miniViewerHotkeyRow
+                            miniViewerOptionsRows
+                        }
+
+                        settingsDivider
+
+                        settingsSection("Notifications") {
+                            notificationRows
+                        }
+
+                        messageSection
+                    }
+                    .mainAppScrollbarStyle(for: store.mainAppUIElementSize)
                 }
-                .padding(16)
-                .mainAppScrollbarStyle(for: store.mainAppUIElementSize)
             }
-            .frame(minWidth: 500, minHeight: 580)
+            .frame(
+                width: proxy.size.width / settingsScale,
+                height: proxy.size.height / settingsScale,
+                alignment: .topLeading
+            )
+            .scaleEffect(settingsScale, anchor: .topLeading)
+            .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)
         }
+        .frame(minWidth: 500, minHeight: 580)
         .onAppear {
             syncDraftValues()
         }
     }
 
-    private var themeSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            SectionTitle("Theme")
+    // MARK: - Section Builder
 
+    private func settingsSection<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text(title)
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(.primary)
+
+            content()
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 16)
+    }
+
+    private var settingsDivider: some View {
+        Divider()
+            .padding(.horizontal, 20)
+    }
+
+    // MARK: - Appearance
+
+    private var themeRow: some View {
+        SettingsRow("Theme") {
             Picker("Theme", selection: Binding(
                 get: { store.theme },
                 set: { store.updateTheme($0) }
@@ -59,76 +117,83 @@ struct SettingsSheetView: View {
                 Text("Light").tag(ThemePreference.light)
             }
             .pickerStyle(.segmented)
+            .frame(width: 160)
         }
     }
 
-    private var appearanceSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            SectionTitle("Background")
-
-            TextField(
-                "Background image URL",
-                text: Binding(
-                    get: { store.backgroundImage },
-                    set: { store.updateBackgroundImage($0) }
+    private var backgroundRows: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            SettingsRow("Background Image") {
+                TextField(
+                    "URL",
+                    text: Binding(
+                        get: { store.backgroundImage },
+                        set: { store.updateBackgroundImage($0) }
+                    )
                 )
-            )
-            .textFieldStyle(.roundedBorder)
+                .textFieldStyle(.roundedBorder)
+            }
 
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Overlay color")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-
+            SettingsRow("Overlay Color") {
                 HStack(spacing: 8) {
                     TextField("#000000", text: $overlayColorDraft)
                         .textFieldStyle(.roundedBorder)
                         .font(.system(.body, design: .monospaced))
+                        .frame(maxWidth: 120)
 
                     Button("Apply") {
                         store.updateOverlayColor(overlayColorDraft)
                         overlayColorDraft = store.overlayColor
                     }
                     .buttonStyle(.bordered)
+                    .controlSize(.small)
                     .focusable(false)
                     .pointerCursor()
                 }
             }
 
-            VStack(alignment: .leading, spacing: 4) {
-                HStack {
-                    Text("Overlay opacity")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Spacer()
+            SettingsRow("Overlay Opacity") {
+                HStack(spacing: 10) {
+                    Slider(value: Binding(
+                        get: { Double(store.overlayOpacity) },
+                        set: { store.updateOverlayOpacity(Int($0)) }
+                    ), in: 0...100, step: 1)
+
                     Text("\(store.overlayOpacity)%")
                         .font(.caption.monospacedDigit())
                         .foregroundStyle(.secondary)
-                }
-
-                Slider(value: Binding(
-                    get: { Double(store.overlayOpacity) },
-                    set: { store.updateOverlayOpacity(Int($0)) }
-                ), in: 0...100, step: 1)
-            }
-
-            Picker("Main App UI Element Size", selection: Binding(
-                get: { store.mainAppUIElementSize },
-                set: { store.updateMainAppUIElementSize($0) }
-            )) {
-                ForEach(UIElementSize.allCases, id: \.rawValue) { size in
-                    Text(size.displayName).tag(size)
+                        .frame(width: 36, alignment: .trailing)
                 }
             }
-            .pickerStyle(.menu)
         }
     }
 
-    private var clickActionSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            SectionTitle("Card Click")
+    private var uiSizeRow: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            SettingsRow("UI Element Size") {
+                Picker("", selection: Binding(
+                    get: { store.mainAppUIElementSize },
+                    set: { store.updateMainAppUIElementSize($0) }
+                )) {
+                    ForEach(UIElementSize.allCases, id: \.rawValue) { size in
+                        Text(size.displayName).tag(size)
+                    }
+                }
+                .pickerStyle(.menu)
+                .frame(width: 140)
+            }
 
-            Picker("Card Click", selection: Binding(
+            Text("Cmd+= / Cmd+- to adjust, Cmd+0 to reset.")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+        }
+    }
+
+    // MARK: - Behavior
+
+    private var clickActionRow: some View {
+        SettingsRow("Card Click Action") {
+            Picker("", selection: Binding(
                 get: { store.cardClickAction },
                 set: { store.updateCardClickAction($0) }
             )) {
@@ -136,20 +201,22 @@ struct SettingsSheetView: View {
                 Text("Terminal").tag(CardClickAction.terminal)
             }
             .pickerStyle(.segmented)
+            .frame(width: 180)
         }
     }
 
-    private var editorSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            SectionTitle("Editor")
-
-            Picker("Default Editor", selection: Binding(
-                get: { store.defaultEditor },
-                set: { store.updateDefaultEditor($0) }
-            )) {
-                ForEach(DefaultEditor.allCases, id: \.rawValue) { editor in
-                    Text(editorLabel(editor)).tag(editor)
+    private var editorRows: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            SettingsRow("Default Editor") {
+                Picker("", selection: Binding(
+                    get: { store.defaultEditor },
+                    set: { store.updateDefaultEditor($0) }
+                )) {
+                    ForEach(DefaultEditor.allCases, id: \.rawValue) { editor in
+                        Text(editorLabel(editor)).tag(editor)
+                    }
                 }
+                .frame(width: 140)
             }
 
             if store.defaultEditor == .custom {
@@ -161,25 +228,27 @@ struct SettingsSheetView: View {
             }
 
             if store.defaultEditor == .code || store.defaultEditor == .cursor {
-                Toggle("Use slower but more compatible method to switch to project", isOn: Binding(
+                Toggle("Use slower but more compatible project switching", isOn: Binding(
                     get: { store.useSlowerCompatibleProjectSwitching },
                     set: { store.updateUseSlowerCompatibleProjectSwitching($0) }
                 ))
+                .font(.callout)
             }
         }
     }
 
-    private var terminalSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            SectionTitle("Terminal")
-
-            Picker("Default Terminal", selection: Binding(
-                get: { store.defaultTerminal },
-                set: { store.updateDefaultTerminal($0) }
-            )) {
-                ForEach(DefaultTerminal.allCases, id: \.rawValue) { terminal in
-                    Text(terminalLabel(terminal)).tag(terminal)
+    private var terminalRows: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            SettingsRow("Default Terminal") {
+                Picker("", selection: Binding(
+                    get: { store.defaultTerminal },
+                    set: { store.updateDefaultTerminal($0) }
+                )) {
+                    ForEach(DefaultTerminal.allCases, id: \.rawValue) { terminal in
+                        Text(terminalLabel(terminal)).tag(terminal)
+                    }
                 }
+                .frame(width: 140)
             }
 
             if store.defaultTerminal == .custom {
@@ -192,7 +261,9 @@ struct SettingsSheetView: View {
         }
     }
 
-    private var hotkeysSection: some View {
+    // MARK: - Hotkeys
+
+    private var globalHotkeyRow: some View {
         HotkeyRecorderRow(
             title: "Global Hotkey",
             helperText: "Toggle the main window from anywhere.",
@@ -203,50 +274,83 @@ struct SettingsSheetView: View {
         )
     }
 
-    private var miniViewerSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HotkeyRecorderRow(
-                title: "Mini Viewer Hotkey",
-                helperText: "Toggle the native mini viewer.",
-                placeholder: "Click to set mini viewer hotkey",
-                shortcut: $miniViewerHotkeyDraft,
-                onSave: { store.saveMiniViewerHotkey($0) },
-                onClear: { store.clearMiniViewerHotkey() }
-            )
+    // MARK: - Mini Viewer
 
-            Picker("Mini Viewer Side", selection: Binding(
-                get: { store.miniViewerSide },
-                set: { store.updateMiniViewerSide($0) }
-            )) {
-                Text("Left").tag(MiniViewerSide.left)
-                Text("Right").tag(MiniViewerSide.right)
-            }
-            .pickerStyle(.segmented)
+    private var miniViewerHotkeyRow: some View {
+        HotkeyRecorderRow(
+            title: "Mini Viewer Hotkey",
+            helperText: "Toggle the native mini viewer.",
+            placeholder: "Click to set mini viewer hotkey",
+            shortcut: $miniViewerHotkeyDraft,
+            onSave: { store.saveMiniViewerHotkey($0) },
+            onClear: { store.clearMiniViewerHotkey() }
+        )
+    }
 
-            Picker("Mini Viewer UI Element Size", selection: Binding(
-                get: { store.miniViewerUIElementSize },
-                set: { store.updateMiniViewerUIElementSize($0) }
-            )) {
-                ForEach(UIElementSize.allCases, id: \.rawValue) { size in
-                    Text(size.displayName).tag(size)
+    private var miniViewerOptionsRows: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            SettingsRow("Side") {
+                Picker("", selection: Binding(
+                    get: { store.miniViewerSide },
+                    set: { store.updateMiniViewerSide($0) }
+                )) {
+                    Text("Left").tag(MiniViewerSide.left)
+                    Text("Right").tag(MiniViewerSide.right)
                 }
+                .pickerStyle(.segmented)
+                .frame(width: 140)
             }
-            .pickerStyle(.menu)
+
+            SettingsRow("UI Element Size") {
+                Picker("", selection: Binding(
+                    get: { store.miniViewerUIElementSize },
+                    set: { store.updateMiniViewerUIElementSize($0) }
+                )) {
+                    ForEach(UIElementSize.allCases, id: \.rawValue) { size in
+                        Text(size.displayName).tag(size)
+                    }
+                }
+                .pickerStyle(.menu)
+                .frame(width: 140)
+            }
 
             Toggle("Show mini viewer on start", isOn: Binding(
                 get: { store.miniViewerShowOnStart },
                 set: { store.updateMiniViewerShowOnStart($0) }
             ))
+            .font(.callout)
         }
     }
 
-    private var notificationsSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            SectionTitle("Notifications")
+    // MARK: - Notifications
 
-            Text("Install voice notifications for task completion.")
+    private var notificationRows: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            SettingsRow("Sound") {
+                HStack(spacing: 8) {
+                    Picker("", selection: Binding(
+                        get: { store.notificationSound },
+                        set: { store.updateNotificationSound($0) }
+                    )) {
+                        ForEach(NotificationSound.allCases, id: \.rawValue) { sound in
+                            Text(sound.displayName).tag(sound)
+                        }
+                    }
+                    .pickerStyle(.menu)
+
+                    Button("Play") {
+                        store.previewNotificationSound()
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .focusable(false)
+                    .pointerCursor()
+                }
+            }
+
+            Text("Used for Bell Mode. Choose a sound, then click Play to preview.")
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(.tertiary)
 
             HStack(spacing: 8) {
                 if store.notificationState.installState == .installed {
@@ -254,13 +358,15 @@ struct SettingsSheetView: View {
                         store.uninstallNotifications()
                     }
                     .buttonStyle(.bordered)
+                    .controlSize(.small)
                     .focusable(false)
                     .pointerCursor()
                 } else {
-                    Button("Install") {
+                    Button("Install Voice Notifications") {
                         store.installNotifications()
                     }
                     .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
                     .focusable(false)
                     .pointerCursor()
                 }
@@ -270,6 +376,7 @@ struct SettingsSheetView: View {
                         store.toggleBellMode()
                     }
                     .buttonStyle(.bordered)
+                    .controlSize(.small)
                     .focusable(false)
                     .pointerCursor()
                 }
@@ -278,26 +385,59 @@ struct SettingsSheetView: View {
         }
     }
 
-    @ViewBuilder
-    private var messageSection: some View {
-        if let error = store.settingsError {
-            Text(error)
-                .font(.caption)
-                .foregroundStyle(.red)
-                .padding(10)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(RoundedRectangle(cornerRadius: 8).fill(Color.red.opacity(0.12)))
-        }
+    // MARK: - Keyboard Shortcuts Reference
 
-        if let confirmation = store.settingsConfirmation {
-            Text(confirmation)
-                .font(.caption)
-                .foregroundStyle(.green)
-                .padding(10)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(RoundedRectangle(cornerRadius: 8).fill(Color.green.opacity(0.12)))
+    private var shortcutsReferenceRows: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            shortcutRow("Cmd+,", "Open Settings")
+            shortcutRow("Cmd+0", "Reset UI Size to Medium")
+            shortcutRow("Cmd+= / Cmd+-", "Increase / Decrease UI Size")
+            shortcutRow("Cmd+1...9", "Open Project 1...9")
         }
     }
+
+    private func shortcutRow(_ key: String, _ description: String) -> some View {
+        HStack(spacing: 0) {
+            Text(key)
+                .font(.system(.caption, design: .monospaced))
+                .foregroundStyle(.secondary)
+                .frame(width: 120, alignment: .leading)
+            Text(description)
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+        }
+    }
+
+    // MARK: - Messages
+
+    @ViewBuilder
+    private var messageSection: some View {
+        if store.settingsError != nil || store.settingsConfirmation != nil {
+            VStack(alignment: .leading, spacing: 8) {
+                if let error = store.settingsError {
+                    Text(error)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                        .padding(10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(RoundedRectangle(cornerRadius: 8).fill(Color.red.opacity(0.12)))
+                }
+
+                if let confirmation = store.settingsConfirmation {
+                    Text(confirmation)
+                        .font(.caption)
+                        .foregroundStyle(.green)
+                        .padding(10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(RoundedRectangle(cornerRadius: 8).fill(Color.green.opacity(0.12)))
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 12)
+        }
+    }
+
+    // MARK: - Helpers
 
     private func syncDraftValues() {
         globalHotkeyDraft = store.globalHotkey
@@ -326,15 +466,25 @@ struct SettingsSheetView: View {
     }
 }
 
-private struct SectionTitle: View {
-    let value: String
+// MARK: - Reusable Row
 
-    init(_ value: String) {
-        self.value = value
+private struct SettingsRow<Content: View>: View {
+    let label: String
+    let content: Content
+
+    init(_ label: String, @ViewBuilder content: () -> Content) {
+        self.label = label
+        self.content = content()
     }
 
     var body: some View {
-        Text(value)
-            .font(.subheadline.weight(.semibold))
+        HStack(alignment: .center) {
+            Text(label)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .frame(minWidth: 120, alignment: .leading)
+
+            content
+        }
     }
 }
