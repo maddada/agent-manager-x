@@ -659,7 +659,6 @@ private struct ProjectGroupHeaderView: View {
                 .buttonStyle(.plain)
                 .focusable(false)
                 .hoverPointerCursor()
-                .hoverPopover("Open project")
                 .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
                 .layoutPriority(0)
 
