@@ -337,7 +337,8 @@ final class ClaudeSessionDetector: AgentSessionDetecting {
             cpuUsage: session.cpuUsage,
             memoryBytes: session.memoryBytes,
             activeSubagentCount: count,
-            isBackground: session.isBackground
+            isBackground: session.isBackground,
+            sessionFilePath: session.sessionFilePath
         )
     }
 
