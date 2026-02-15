@@ -8,7 +8,7 @@ final class SettingsStore {
     static let defaultMiniViewerHotkey = "Command+Control+Shift+M"
     static let defaultMiniViewerSide: MiniViewerSide = .left
     static let defaultMiniViewerShowOnStart = true
-    static let defaultMainAppUIElementSize: UIElementSize = .small
+    static let defaultMainAppUIElementSize: UIElementSize = .medium
     static let defaultMiniViewerUIElementSize: UIElementSize = .small
     static let defaultEditorValue: DefaultEditor = .code
     static let defaultTerminalValue: DefaultTerminal = .terminal
@@ -19,6 +19,7 @@ final class SettingsStore {
     static let defaultBackgroundImage = "https://images.pexels.com/photos/28428592/pexels-photo-28428592.jpeg"
     static let defaultOverlayOpacity = 88
     static let defaultOverlayColor = "#000000"
+    static let defaultNotificationSound: NotificationSound = .arcade
 
     private let defaults: UserDefaults
 
@@ -142,6 +143,11 @@ final class SettingsStore {
     var overlayColor: String {
         get { defaults.string(forKey: SettingsKeys.overlayColor) ?? Self.defaultOverlayColor }
         set { defaults.set(newValue, forKey: SettingsKeys.overlayColor) }
+    }
+
+    var notificationSound: NotificationSound {
+        get { enumValue(forKey: SettingsKeys.notificationSound, default: Self.defaultNotificationSound) }
+        set { defaults.set(newValue.rawValue, forKey: SettingsKeys.notificationSound) }
     }
 
     func projectCommand(for projectPath: String, action: ProjectCommandAction) -> String {

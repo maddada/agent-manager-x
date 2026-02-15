@@ -3,6 +3,7 @@ import Foundation
 enum NotificationServiceError: Error, LocalizedError {
     case invalidSettingsFormat
     case notificationSystemNotInstalled
+    case notificationSoundNotFound
 
     var errorDescription: String? {
         switch self {
@@ -10,6 +11,8 @@ enum NotificationServiceError: Error, LocalizedError {
             return "settings.json is not a valid JSON object"
         case .notificationSystemNotInstalled:
             return "Notification system not installed"
+        case .notificationSoundNotFound:
+            return "Notification sound file not found"
         }
     }
 }
@@ -18,6 +21,8 @@ final class NotificationService {
     private let fileManager: FileManager
     private let homeDirectoryURL: URL
     private let notificationScriptFilename = "notify-local-tts.sh"
+    private let afplayExecutablePath = "/usr/bin/afplay"
+    private var previewProcess: Process?
 
     init(
         fileManager: FileManager = .default,
@@ -58,21 +63,51 @@ final class NotificationService {
         }
     }
 
-    func setBellMode(enabled: Bool) throws {
+    func setBellMode(enabled: Bool, bellSoundPath: String? = nil) throws {
         guard try checkNotificationSystemInstalled() else {
             throw NotificationServiceError.notificationSystemNotInstalled
         }
 
-        let claudeScript = enabled ? NotificationScripts.claudeBellScript : NotificationScripts.claudeVoiceScript
+        let soundPath = bellSoundPath ?? NotificationScripts.defaultBellSoundPath
+        let claudeScript = enabled ? NotificationScripts.claudeBellScript(soundPath: soundPath) : NotificationScripts.claudeVoiceScript
         try writeExecutableScript(claudeScript, to: claudeScriptPath)
 
         for root in codexDirectoryPaths {
             let hooksDirectory = codexHooksDirectoryPath(for: root)
             try ensureDirectoryExists(at: hooksDirectory)
 
-            let codexScript = enabled ? NotificationScripts.codexBellScript : NotificationScripts.codexVoiceScript
+            let codexScript = enabled ? NotificationScripts.codexBellScript(soundPath: soundPath) : NotificationScripts.codexVoiceScript
             try writeExecutableScript(codexScript, to: codexScriptPath(for: root))
         }
+    }
+
+    func playNotificationSoundPreview(soundPath: String) throws {
+        guard fileManager.fileExists(atPath: soundPath) else {
+            throw NotificationServiceError.notificationSoundNotFound
+        }
+
+        stopNotificationSoundPreview()
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: afplayExecutablePath)
+        process.arguments = [soundPath]
+        process.terminationHandler = { [weak self] _ in
+            self?.previewProcess = nil
+        }
+
+        try process.run()
+        previewProcess = process
+    }
+
+    func stopNotificationSoundPreview() {
+        guard let process = previewProcess else {
+            return
+        }
+
+        if process.isRunning {
+            process.terminate()
+        }
+        previewProcess = nil
     }
 
     private func checkClaudeNotificationSystemInstalled() throws -> Bool {
@@ -107,11 +142,18 @@ final class NotificationService {
         try ensureDirectoryExists(at: claudeHooksDirectoryPath)
         try writeExecutableScript(NotificationScripts.claudeVoiceScript, to: claudeScriptPath)
 
+        try backupFileIfExists(at: claudeSettingsPath)
         var settings = try readClaudeSettingsJSONIfPresent() ?? [:]
         ensureNotificationStopHook(in: &settings)
         try writeClaudeSettingsJSON(settings)
 
+        try backupFileIfExists(at: claudeMDPath)
         try appendVoiceInstructionsIfNeeded(at: claudeMDPath)
+
+        for profileMDPath in claudeProfileMDPaths {
+            try backupFileIfExists(at: profileMDPath)
+            try appendVoiceInstructionsIfNeeded(at: profileMDPath)
+        }
     }
 
     private func installCodexNotificationSystem() throws {
@@ -125,6 +167,7 @@ final class NotificationService {
             let configPath = codexConfigPath(for: root)
             var configContent = ""
             if fileManager.fileExists(atPath: configPath.path) {
+                try backupFileIfExists(at: configPath)
                 configContent = try String(contentsOf: configPath, encoding: .utf8)
             } else {
                 let directory = configPath.deletingLastPathComponent()
@@ -138,22 +181,34 @@ final class NotificationService {
         }
 
         for agentsPath in codexAGENTSPaths {
+            try backupFileIfExists(at: agentsPath)
             try appendVoiceInstructionsIfNeeded(at: agentsPath)
         }
     }
 
     private func uninstallClaudeNotificationSystem() throws {
         if fileManager.fileExists(atPath: claudeSettingsPath.path) {
+            try backupFileIfExists(at: claudeSettingsPath)
             var settings = try readClaudeSettingsJSON()
             removeNotificationStopHooks(from: &settings)
             try writeClaudeSettingsJSON(settings)
         }
 
         if fileManager.fileExists(atPath: claudeMDPath.path) {
+            try backupFileIfExists(at: claudeMDPath)
             let content = try String(contentsOf: claudeMDPath, encoding: .utf8)
             let updated = removeVoiceNotificationsSection(from: content)
             if updated != content {
                 try updated.write(to: claudeMDPath, atomically: true, encoding: .utf8)
+            }
+        }
+
+        for profileMDPath in claudeProfileMDPaths where fileManager.fileExists(atPath: profileMDPath.path) {
+            try backupFileIfExists(at: profileMDPath)
+            let content = try String(contentsOf: profileMDPath, encoding: .utf8)
+            let updated = removeVoiceNotificationsSection(from: content)
+            if updated != content {
+                try updated.write(to: profileMDPath, atomically: true, encoding: .utf8)
             }
         }
 
@@ -166,6 +221,7 @@ final class NotificationService {
         for root in codexDirectoryPaths {
             let configPath = codexConfigPath(for: root)
             if fileManager.fileExists(atPath: configPath.path) {
+                try backupFileIfExists(at: configPath)
                 let content = try String(contentsOf: configPath, encoding: .utf8)
                 let updated = removeCodexNotifyCommand(from: content)
                 if updated != content {
@@ -180,6 +236,7 @@ final class NotificationService {
         }
 
         for agentsPath in codexAGENTSPaths where fileManager.fileExists(atPath: agentsPath.path) {
+            try backupFileIfExists(at: agentsPath)
             let content = try String(contentsOf: agentsPath, encoding: .utf8)
             let updated = removeVoiceNotificationsSection(from: content)
             if updated != content {
@@ -216,12 +273,23 @@ final class NotificationService {
         claudeDirectoryPath.appendingPathComponent("CLAUDE.md")
     }
 
+    private var claudeProfileDirectoryPaths: [URL] {
+        [
+            homeDirectoryURL.appendingPathComponent(".claude-profiles/personal", isDirectory: true),
+            homeDirectoryURL.appendingPathComponent(".claude-profiles/work", isDirectory: true)
+        ].filter { fileManager.fileExists(atPath: $0.path) }
+    }
+
+    private var claudeProfileMDPaths: [URL] {
+        claudeProfileDirectoryPaths.map { $0.appendingPathComponent("CLAUDE.md") }
+    }
+
     private var codexDirectoryPaths: [URL] {
         [
             homeDirectoryURL.appendingPathComponent(".codex", isDirectory: true),
             homeDirectoryURL.appendingPathComponent(".codex-profiles/work", isDirectory: true),
             homeDirectoryURL.appendingPathComponent(".codex-profiles/personal", isDirectory: true)
-        ]
+        ].filter { fileManager.fileExists(atPath: $0.path) }
     }
 
     private var codexAGENTSPaths: [URL] {
@@ -285,6 +353,19 @@ final class NotificationService {
     private func writeExecutableScript(_ content: String, to path: URL) throws {
         try content.write(to: path, atomically: true, encoding: .utf8)
         try fileManager.setAttributes([.posixPermissions: 0o755], ofItemAtPath: path.path)
+    }
+
+    private func backupFileIfExists(at path: URL) throws {
+        guard fileManager.fileExists(atPath: path.path) else {
+            return
+        }
+
+        let backupPath = path.appendingPathExtension("amx-backup")
+        if fileManager.fileExists(atPath: backupPath.path) {
+            try fileManager.removeItem(at: backupPath)
+        }
+
+        try fileManager.copyItem(at: path, to: backupPath)
     }
 
     private func ensureDirectoryExists(at path: URL) throws {
@@ -441,33 +522,52 @@ final class NotificationService {
         let sectionHeader = "## Voice Notifications"
         let sectionContent = NotificationScripts.voiceInstructionsSection
 
-        guard let sectionRange = content.range(of: sectionHeader) else {
-            guard !content.isEmpty else {
+        // Remove any standalone summary section first to avoid duplication,
+        // since the voice notifications section includes the summary instruction.
+        let cleaned = removeMarkdownSection(from: content, header: "## Add a brief summary to your final message")
+
+        guard let sectionRange = cleaned.range(of: sectionHeader) else {
+            guard !cleaned.isEmpty else {
                 return sectionContent
             }
 
-            if content.hasSuffix("\n\n") {
-                return content + sectionContent
+            if cleaned.hasSuffix("\n\n") {
+                return cleaned + sectionContent
             }
 
-            if content.hasSuffix("\n") {
-                return content + "\n" + sectionContent
+            if cleaned.hasSuffix("\n") {
+                return cleaned + "\n" + sectionContent
             }
 
-            return content + "\n\n" + sectionContent
+            return cleaned + "\n\n" + sectionContent
         }
 
-        let searchRange = sectionRange.upperBound..<content.endIndex
-        let sectionEnd = content.range(of: "\n## ", range: searchRange)?.lowerBound ?? content.endIndex
+        let searchRange = sectionRange.upperBound..<cleaned.endIndex
+        let sectionEnd = cleaned.range(of: "\n## ", range: searchRange)?.lowerBound ?? cleaned.endIndex
 
-        var updated = content
+        var updated = cleaned
         updated.replaceSubrange(sectionRange.lowerBound..<sectionEnd, with: sectionContent)
         return updated
     }
 
     private func removeVoiceNotificationsSection(from content: String) -> String {
-        let sectionHeader = "## Voice Notifications"
-        guard let sectionRange = content.range(of: sectionHeader) else {
+        let result = removeMarkdownSection(from: content, header: "## Voice Notifications")
+
+        guard result != content else {
+            return content
+        }
+
+        // Restore standalone summary section so the AI keeps adding Summary lines
+        // even when voice notifications are uninstalled.
+        return appendSectionIfMissing(
+            in: result,
+            header: "## Add a brief summary to your final message",
+            section: NotificationScripts.standaloneSummarySection
+        )
+    }
+
+    private func removeMarkdownSection(from content: String, header: String) -> String {
+        guard let sectionRange = content.range(of: header) else {
             return content
         }
 
@@ -486,6 +586,26 @@ final class NotificationService {
         }
 
         return String(content[..<actualStart]) + String(content[sectionEnd...])
+    }
+
+    private func appendSectionIfMissing(in content: String, header: String, section: String) -> String {
+        guard content.range(of: header) == nil else {
+            return content
+        }
+
+        if content.isEmpty {
+            return section
+        }
+
+        if content.hasSuffix("\n\n") {
+            return content + section
+        }
+
+        if content.hasSuffix("\n") {
+            return content + "\n" + section
+        }
+
+        return content + "\n\n" + section
     }
 }
 
@@ -525,8 +645,8 @@ CONTENT=$(tac "$TRANSCRIPT_PATH" | while read -r line; do
     fi
 done)
 
-# Look for Summary: line (case insensitive)
-SUMMARY=$(echo "$CONTENT" | grep -im1 "^Summary:" | sed 's/^[Ss]ummary:[[:space:]]*//')
+# Look for last Summary: line (case insensitive)
+SUMMARY=$(echo "$CONTENT" | grep -i "^Summary:" | tail -1 | sed 's/^[Ss]ummary:[[:space:]]*//')
 
 if [ -n "$SUMMARY" ]; then
     say "$SUMMARY"
@@ -554,7 +674,7 @@ if [ "$EVENT_TYPE" != "agent-turn-complete" ]; then
 fi
 
 CONTENT=$(echo "$PAYLOAD" | jq -r '."last-assistant-message" // empty' 2>/dev/null)
-SUMMARY=$(echo "$CONTENT" | grep -im1 "^Summary:" | sed 's/^[Ss]ummary:[[:space:]]*//')
+SUMMARY=$(echo "$CONTENT" | grep -i "^Summary:" | tail -1 | sed 's/^[Ss]ummary:[[:space:]]*//')
 
 if [ -n "$SUMMARY" ]; then
     say "$SUMMARY"
@@ -564,16 +684,27 @@ fi
     static let voiceInstructionsSection = #"""
 ## Voice Notifications
 
-## Add a brief summary to your final message
-
-When completing a task and handing control back to the user, first and last line of the output must be:
-`Summary: <brief summary>` (same summary at the top and bottom).
+When completing a task and handing control back to the user, the last line of the output must be:
+`Summary: <brief summary>`.
 """#
 
-    static let claudeBellScript = #"""
+    static let standaloneSummarySection = #"""
+## Add a brief summary to your final message
+
+When completing a task and handing control back to the user, the last line of the output must be:
+`Summary: <brief summary>`.
+"""#
+
+    static let defaultBellSoundPath = "/System/Library/Sounds/Glass.aiff"
+
+    static func claudeBellScript(soundPath: String) -> String {
+        let escapedSoundPath = shellSingleQuoted(soundPath)
+        return """
 #!/bin/bash
 # Voice notification script for Claude Code (Bell Mode)
 # Reads hook metadata from stdin, loads transcript, and plays a bell if Summary found
+
+SOUND_PATH='\(escapedSoundPath)'
 
 # Read hook metadata from stdin
 INPUT=$(cat)
@@ -603,18 +734,27 @@ CONTENT=$(tac "$TRANSCRIPT_PATH" | while read -r line; do
     fi
 done)
 
-# Look for Summary: line (case insensitive)
-SUMMARY=$(echo "$CONTENT" | grep -im1 "^Summary:")
+# Look for last Summary: line (case insensitive)
+SUMMARY=$(echo "$CONTENT" | grep -i "^Summary:" | tail -1)
 
 if [ -n "$SUMMARY" ]; then
-    afplay /System/Library/Sounds/Glass.aiff
+    if [ -f "$SOUND_PATH" ]; then
+        afplay "$SOUND_PATH"
+    else
+        afplay \(defaultBellSoundPath)
+    fi
 fi
-"""#
+"""
+    }
 
-    static let codexBellScript = #"""
+    static func codexBellScript(soundPath: String) -> String {
+        let escapedSoundPath = shellSingleQuoted(soundPath)
+        return """
 #!/bin/bash
 # Voice notification script for Codex CLI (Bell Mode)
 # Reads JSON payload from argv/stdin and plays a bell if Summary found
+
+SOUND_PATH='\(escapedSoundPath)'
 
 PAYLOAD="$1"
 
@@ -632,10 +772,19 @@ if [ "$EVENT_TYPE" != "agent-turn-complete" ]; then
 fi
 
 CONTENT=$(echo "$PAYLOAD" | jq -r '."last-assistant-message" // empty' 2>/dev/null)
-SUMMARY=$(echo "$CONTENT" | grep -im1 "^Summary:")
+SUMMARY=$(echo "$CONTENT" | grep -i "^Summary:" | tail -1)
 
 if [ -n "$SUMMARY" ]; then
-    afplay /System/Library/Sounds/Glass.aiff
+    if [ -f "$SOUND_PATH" ]; then
+        afplay "$SOUND_PATH"
+    else
+        afplay \(defaultBellSoundPath)
+    fi
 fi
-"""#
+"""
+    }
+
+    private static func shellSingleQuoted(_ value: String) -> String {
+        value.replacingOccurrences(of: "'", with: "'\"'\"'")
+    }
 }

@@ -19,6 +19,7 @@ enum SettingsKeys {
     static let backgroundImage = "agent-manager-x-background-image"
     static let overlayOpacity = "agent-manager-x-overlay-opacity"
     static let overlayColor = "agent-manager-x-overlay-color"
+    static let notificationSound = "agent-manager-x-notification-sound"
     static let projectCommands = "agent-manager-x-project-commands"
     static let customNames = "agent-manager-x-custom-names"
     static let customURLs = "agent-manager-x-custom-urls"
