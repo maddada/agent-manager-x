@@ -294,8 +294,6 @@ private struct MainContentView: View {
     @EnvironmentObject private var store: AppStore
     let groups: [ProjectGroup]
 
-    private let gridColumns = [GridItem(.adaptive(minimum: 360), spacing: 14, alignment: .top)]
-
     var body: some View {
         Group {
             if store.isLoading && store.sessions.isEmpty {
@@ -330,8 +328,12 @@ private struct MainContentView: View {
             } else if store.displayMode == .list {
                 ScrollView(.vertical) {
                     LazyVStack(alignment: .leading, spacing: 14) {
-                        ForEach(groups) { group in
-                            ProjectGroupCardView(group: group, compactSessions: true)
+                        ForEach(Array(groups.enumerated()), id: \.element.id) { index, group in
+                            ProjectGroupCardView(
+                                group: group,
+                                compactSessions: true,
+                                shortcutNumber: index + 1
+                            )
                                 .frame(maxWidth: .infinity, alignment: .leading)
                         }
                     }
@@ -343,9 +345,13 @@ private struct MainContentView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             } else {
                 ScrollView(.vertical) {
-                    LazyVGrid(columns: gridColumns, spacing: 14) {
-                        ForEach(groups) { group in
-                            ProjectGroupCardView(group: group, compactSessions: false)
+                    MasonryColumnsLayout(minimumColumnWidth: 360, spacing: 14) {
+                        ForEach(Array(groups.enumerated()), id: \.element.id) { index, group in
+                            ProjectGroupCardView(
+                                group: group,
+                                compactSessions: false,
+                                shortcutNumber: index + 1
+                            )
                                 .frame(maxWidth: .infinity, alignment: .leading)
                         }
                     }
@@ -359,11 +365,93 @@ private struct MainContentView: View {
     }
 }
 
+/// Arranges subviews into adaptive columns, always placing the next item in the
+/// shortest column to avoid vertical gaps between cards.
+private struct MasonryColumnsLayout: Layout {
+    let minimumColumnWidth: CGFloat
+    let spacing: CGFloat
+
+    func sizeThatFits(
+        proposal: ProposedViewSize,
+        subviews: Subviews,
+        cache _: inout ()
+    ) -> CGSize {
+        let layout = computeLayout(for: subviews, availableWidth: proposal.width)
+        return CGSize(width: layout.width, height: layout.contentHeight)
+    }
+
+    func placeSubviews(
+        in bounds: CGRect,
+        proposal _: ProposedViewSize,
+        subviews: Subviews,
+        cache _: inout ()
+    ) {
+        let layout = computeLayout(for: subviews, availableWidth: bounds.width)
+
+        for (index, subview) in subviews.enumerated() {
+            guard index < layout.frames.count else { continue }
+
+            let frame = layout.frames[index]
+            subview.place(
+                at: CGPoint(x: bounds.minX + frame.minX, y: bounds.minY + frame.minY),
+                proposal: ProposedViewSize(width: frame.width, height: frame.height)
+            )
+        }
+    }
+
+    private func computeLayout(for subviews: Subviews, availableWidth: CGFloat?) -> MasonryLayoutResult {
+        guard !subviews.isEmpty else {
+            let width = max(availableWidth ?? minimumColumnWidth, minimumColumnWidth)
+            return MasonryLayoutResult(frames: [], contentHeight: 0, width: width)
+        }
+
+        let resolvedWidth = max(availableWidth ?? minimumColumnWidth, minimumColumnWidth)
+        let columnCount = max(1, Int((resolvedWidth + spacing) / (minimumColumnWidth + spacing)))
+        let totalSpacingWidth = spacing * CGFloat(columnCount - 1)
+        let columnWidth = (resolvedWidth - totalSpacingWidth) / CGFloat(columnCount)
+
+        var columnHeights = Array(repeating: CGFloat.zero, count: columnCount)
+        var frames = Array(repeating: CGRect.zero, count: subviews.count)
+
+        for (index, subview) in subviews.enumerated() {
+            guard let targetColumn = shortestColumnIndex(in: columnHeights) else { continue }
+
+            let size = subview.sizeThatFits(ProposedViewSize(width: columnWidth, height: nil))
+            let x = CGFloat(targetColumn) * (columnWidth + spacing)
+            let y = columnHeights[targetColumn]
+
+            frames[index] = CGRect(x: x, y: y, width: columnWidth, height: size.height)
+            columnHeights[targetColumn] = y + size.height + spacing
+        }
+
+        let tallestColumn = columnHeights.max() ?? 0
+        let contentHeight = max(0, tallestColumn - spacing)
+
+        return MasonryLayoutResult(frames: frames, contentHeight: contentHeight, width: resolvedWidth)
+    }
+
+    private func shortestColumnIndex(in heights: [CGFloat]) -> Int? {
+        heights.enumerated().min { lhs, rhs in
+            if lhs.element == rhs.element {
+                return lhs.offset < rhs.offset
+            }
+            return lhs.element < rhs.element
+        }?.offset
+    }
+}
+
+private struct MasonryLayoutResult {
+    let frames: [CGRect]
+    let contentHeight: CGFloat
+    let width: CGFloat
+}
+
 private struct ProjectGroupCardView: View {
     @EnvironmentObject private var store: AppStore
 
     let group: ProjectGroup
     let compactSessions: Bool
+    let shortcutNumber: Int?
 
     @State private var commandEditorAction: ProjectCommandAction = .run
     @State private var commandDraft = ""
@@ -396,6 +484,7 @@ private struct ProjectGroupCardView: View {
                 branch: groupBranch,
                 diffStats: diffStats,
                 hasDiffStats: hasDiffStats,
+                shortcutNumber: shortcutNumber,
                 actionsOnNewRow: !compactSessions,
                 onKillAll: {
                     store.killProjectSessions(group)
@@ -437,12 +526,12 @@ private struct ProjectGroupCardView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(.regularMaterial.opacity(0.92))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(Color.primary.opacity(0.12), lineWidth: 1)
+            ZStack {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(.regularMaterial.opacity(0.92))
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .strokeBorder(Color.primary.opacity(0.12), lineWidth: 1)
+            }
         )
         .zIndex(activePopoverSessionID == nil ? 0 : 10_000)
         .sheet(isPresented: $commandEditorVisible) {
@@ -491,6 +580,7 @@ private struct ProjectGroupHeaderView: View {
     let branch: String?
     let diffStats: GitDiffStats?
     let hasDiffStats: Bool
+    let shortcutNumber: Int?
     let actionsOnNewRow: Bool
     let onKillAll: () -> Void
     let onOpenProject: () -> Void
@@ -502,29 +592,31 @@ private struct ProjectGroupHeaderView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: actionsOnNewRow ? 8 : 0) {
             HStack(alignment: .top, spacing: 10) {
-                Button(role: .destructive, action: onKillAll) {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 10, weight: .bold))
-                        .frame(width: 18, height: 18)
-                        .background(Circle().fill(Color.red))
-                        .foregroundStyle(.white)
-                }
-                .buttonStyle(.plain)
-                .focusable(false)
-                .hoverPointerCursor()
-                .help("Kill all sessions in project")
-                .opacity(isHoveringHeader ? 1 : 0)
-                .allowsHitTesting(isHoveringHeader)
-                .layoutPriority(2)
-
                 Button(action: onOpenProject) {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(group.projectName)
-                            .font(store.mainAppUIElementSize.projectHeaderTitleFont)
-                            .foregroundStyle(.primary)
-                            .lineLimit(1)
-                            .truncationMode(.tail)
-                            .frame(minWidth: 0, alignment: .leading)
+                        HStack(spacing: 6) {
+                            Text(group.projectName)
+                                .font(store.mainAppUIElementSize.projectHeaderTitleFont)
+                                .foregroundStyle(.primary)
+                                .lineLimit(1)
+                                .truncationMode(.tail)
+
+                            if let shortcutNumber {
+                                if shortcutNumber <= 9 {
+                                    Text("⌘\(shortcutNumber)")
+                                        .font(store.mainAppUIElementSize.projectHeaderTitleFont)
+                                        .foregroundStyle(.secondary)
+                                        .opacity(0.28)
+                                        .help("Shortcut: Cmd+\(shortcutNumber)")
+                                } else {
+                                    Text("\(shortcutNumber)")
+                                        .font(store.mainAppUIElementSize.projectHeaderTitleFont)
+                                        .foregroundStyle(.secondary)
+                                        .opacity(0.28)
+                                }
+                            }
+                        }
+                        .frame(minWidth: 0, alignment: .leading)
 
                         Text(truncatePath(group.projectPath))
                             .font(store.mainAppUIElementSize.projectHeaderMetaFont)
@@ -585,6 +677,22 @@ private struct ProjectGroupHeaderView: View {
             }
         }
         .padding(12)
+        .overlay(alignment: .topLeading) {
+            Button(role: .destructive, action: onKillAll) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 10, weight: .bold))
+                    .frame(width: 18, height: 18)
+                    .background(Circle().fill(Color.red))
+                    .foregroundStyle(.white)
+            }
+            .buttonStyle(.plain)
+            .focusable(false)
+            .hoverPointerCursor()
+            .help("Kill all sessions in project")
+            .offset(x: -8, y: -8)
+            .opacity(isHoveringHeader ? 1 : 0)
+            .allowsHitTesting(isHoveringHeader)
+        }
         .onHover { hovering in
             isHoveringHeader = hovering
         }
@@ -671,7 +779,7 @@ private struct SessionCardView: View {
             return fallback
         }
 
-        return message
+        return message.replacingOccurrences(of: "\\n+", with: " ", options: .regularExpression)
     }
 
     private var fullMessage: String? {
@@ -684,7 +792,7 @@ private struct SessionCardView: View {
     }
 
     private var messagePopoverSize: CGSize {
-        compact ? CGSize(width: 430, height: 210) : CGSize(width: 520, height: 240)
+        compact ? CGSize(width: 430, height: 320) : CGSize(width: 520, height: 360)
     }
 
     private func scheduleMessagePopoverShow() {
@@ -855,16 +963,26 @@ private struct SessionCardView: View {
         })
         .overlay(alignment: .top) {
             if isMessagePopoverPresented, let fullMessage {
-                ScrollView(.vertical, showsIndicators: true) {
+                ViewThatFits(in: .vertical) {
                     Text(fullMessage)
                         .font(.body)
                         .foregroundStyle(.primary)
                         .textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(14)
+
+                    ScrollView(.vertical, showsIndicators: true) {
+                        Text(fullMessage)
+                            .font(.body)
+                            .foregroundStyle(.primary)
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(14)
+                    }
+                    .mainAppScrollbarStyle(for: store.mainAppUIElementSize)
                 }
-                .mainAppScrollbarStyle(for: store.mainAppUIElementSize)
-                .frame(width: messagePopoverSize.width, height: messagePopoverSize.height)
+                .frame(maxHeight: messagePopoverSize.height)
+                .frame(width: messagePopoverSize.width)
                 .background(
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
                         .fill(Color(nsColor: .windowBackgroundColor))
