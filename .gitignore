@@ -1,1 +1,54 @@
+# ----- macOS -----
 .DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+
+# ----- Xcode -----
+# Build artifacts
+build/
+DerivedData/
+*.moved-aside
+
+# User-specific Xcode settings
+*.xcuserstate
+*.xcuserdatad/
+xcuserdata/
+*.xccheckout
+*.xcscmblueprint
+
+# Xcode workspaces (keep shared schemes/settings, ignore user data)
+*.xcworkspace/xcuserdata/
+
+# Playgrounds
+timeline.xctimeline
+playground.xcworkspace/
+
+# ----- Swift Package Manager -----
+.build/
+Package.resolved
+.swiftpm/
+Packages/
+
+# ----- Release / Distribution -----
+release/
+*.dmg
+*.pkg
+*.app
+*.dSYM.zip
+*.dSYM
+
+# ----- Code Signing -----
+*.mobileprovision
+*.provisionprofile
+
+# ----- Archives -----
+*.xcarchive
+
+# ----- Miscellaneous -----
+*.ipa
+*.hmap
+*.swp
+*~

@@ -189,10 +189,10 @@ final class NotificationService {
     }
 
     private func appendVoiceInstructionsIfNeeded(at path: URL) throws {
-        var content = (try? String(contentsOf: path, encoding: .utf8)) ?? ""
-        if !content.contains("## Voice Notifications") {
-            content += NotificationScripts.voiceInstructionsSection
-            try content.write(to: path, atomically: true, encoding: .utf8)
+        let content = (try? String(contentsOf: path, encoding: .utf8)) ?? ""
+        let updated = upsertVoiceNotificationsSection(in: content)
+        if updated != content {
+            try updated.write(to: path, atomically: true, encoding: .utf8)
         }
     }
 
@@ -437,6 +437,34 @@ final class NotificationService {
         return content + "\n"
     }
 
+    private func upsertVoiceNotificationsSection(in content: String) -> String {
+        let sectionHeader = "## Voice Notifications"
+        let sectionContent = NotificationScripts.voiceInstructionsSection
+
+        guard let sectionRange = content.range(of: sectionHeader) else {
+            guard !content.isEmpty else {
+                return sectionContent
+            }
+
+            if content.hasSuffix("\n\n") {
+                return content + sectionContent
+            }
+
+            if content.hasSuffix("\n") {
+                return content + "\n" + sectionContent
+            }
+
+            return content + "\n\n" + sectionContent
+        }
+
+        let searchRange = sectionRange.upperBound..<content.endIndex
+        let sectionEnd = content.range(of: "\n## ", range: searchRange)?.lowerBound ?? content.endIndex
+
+        var updated = content
+        updated.replaceSubrange(sectionRange.lowerBound..<sectionEnd, with: sectionContent)
+        return updated
+    }
+
     private func removeVoiceNotificationsSection(from content: String) -> String {
         let sectionHeader = "## Voice Notifications"
         guard let sectionRange = content.range(of: sectionHeader) else {
@@ -536,14 +564,10 @@ fi
     static let voiceInstructionsSection = #"""
 ## Voice Notifications
 
-When completing a task and handing control back to the user, start your final message with a brief TLDR on the first line summarizing what was done. Format: `Summary: <summary>`. This line will be read aloud by the notification system to alert the user of task completion.
+## Add a brief summary to your final message
 
-Example:
-```
-Summary: Fixed the authentication bug and added input validation.
-
-Here are the details of what I changed...
-```
+When completing a task and handing control back to the user, first and last line of the output must be:
+`Summary: <brief summary>` (same summary at the top and bottom).
 """#
 
     static let claudeBellScript = #"""

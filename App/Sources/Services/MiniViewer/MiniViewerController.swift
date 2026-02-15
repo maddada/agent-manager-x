@@ -28,7 +28,6 @@ final class MiniViewerController {
     private let sessionDetectionService: SessionDetectionService
     private let gitDiffStatsService: GitDiffStatsService
     private let coreActionsService: CoreActionsService
-    private let shell: ShellCommandRunning
     private let settings: SettingsStore
     private let fileManager: FileManager
 
@@ -37,7 +36,7 @@ final class MiniViewerController {
 
     private var side: MiniViewerSide
     private var uiElementSize: UIElementSize
-    private var experimentalVSCodeSessionOpening: Bool
+    private var useSlowerCompatibleProjectSwitching: Bool
     private var isVisible = true
 
     private var process: Process?
@@ -55,20 +54,18 @@ final class MiniViewerController {
         sessionDetectionService: SessionDetectionService = SessionDetectionService(),
         gitDiffStatsService: GitDiffStatsService = GitDiffStatsService(),
         coreActionsService: CoreActionsService = CoreActionsService(),
-        shell: ShellCommandRunning = ShellCommandRunner(),
         settings: SettingsStore = .shared,
         fileManager: FileManager = .default
     ) {
         self.sessionDetectionService = sessionDetectionService
         self.gitDiffStatsService = gitDiffStatsService
         self.coreActionsService = coreActionsService
-        self.shell = shell
         self.settings = settings
         self.fileManager = fileManager
 
         side = settings.miniViewerSide
         uiElementSize = settings.miniViewerUIElementSize
-        experimentalVSCodeSessionOpening = settings.experimentalVSCodeSessionOpening
+        useSlowerCompatibleProjectSwitching = settings.useSlowerCompatibleProjectSwitching
     }
 
     func setSide(_ side: MiniViewerSide) {
@@ -87,10 +84,10 @@ final class MiniViewerController {
         }
     }
 
-    func setExperimentalVSCodeSessionOpening(_ enabled: Bool) {
+    func setUseSlowerCompatibleProjectSwitching(_ enabled: Bool) {
         queue.async {
-            self.experimentalVSCodeSessionOpening = enabled
-            self.settings.experimentalVSCodeSessionOpening = enabled
+            self.useSlowerCompatibleProjectSwitching = enabled
+            self.settings.useSlowerCompatibleProjectSwitching = enabled
         }
     }
 
@@ -438,7 +435,7 @@ final class MiniViewerController {
     private func handleMiniViewerActionLocked(_ action: MiniViewerAction) {
         switch action.action {
         case "focusSession":
-            if openInCodeEditor(projectPath: action.projectPath, projectName: action.projectName) {
+            if openInPreferredEditor(projectPath: action.projectPath, projectName: action.projectName) {
                 return
             }
 
@@ -454,23 +451,13 @@ final class MiniViewerController {
         }
     }
 
-    private func openInCodeEditor(projectPath: String, projectName: String) -> Bool {
-        if experimentalVSCodeSessionOpening {
-            let openResult = shell.run(
-                executable: "/usr/bin/open",
-                arguments: ["-b", "com.microsoft.VSCode", projectPath],
-                currentDirectory: nil,
-                environment: ["AMX_PROJECT_NAME": projectName],
-                timeout: 2.0
-            )
-
-            if openResult.isSuccess {
-                return true
-            }
-        }
-
+    private func openInPreferredEditor(projectPath: String, projectName: String) -> Bool {
         do {
-            try coreActionsService.openInEditor(path: projectPath, editor: .code)
+            try coreActionsService.openInEditor(
+                path: projectPath,
+                useSlowerCompatibleProjectSwitching: useSlowerCompatibleProjectSwitching,
+                projectName: projectName
+            )
             return true
         } catch {
             return false

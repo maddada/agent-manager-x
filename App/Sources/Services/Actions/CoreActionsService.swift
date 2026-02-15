@@ -61,12 +61,13 @@ final class CoreActionsService {
     func openInEditor(
         path: String,
         editor overrideEditor: DefaultEditor? = nil,
-        experimentalVSCodeSessionOpening: Bool = false,
+        useSlowerCompatibleProjectSwitching: Bool = false,
         projectName: String? = nil
     ) throws {
         let selectedEditor = overrideEditor ?? settings.defaultEditor
 
-        if selectedEditor == .code && experimentalVSCodeSessionOpening {
+        if !useSlowerCompatibleProjectSwitching,
+           let openArguments = preferredAppOpenArguments(for: selectedEditor, path: path) {
             var environment: [String: String] = [:]
             let trimmedProjectName = projectName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             if !trimmedProjectName.isEmpty {
@@ -75,7 +76,7 @@ final class CoreActionsService {
 
             if (try? spawn(
                 executable: "/usr/bin/open",
-                arguments: ["-b", "com.microsoft.VSCode", path],
+                arguments: openArguments,
                 enrichPath: false,
                 additionalEnvironment: environment,
                 lookupExecutableInPath: false
@@ -105,6 +106,17 @@ final class CoreActionsService {
                 throw CoreActionsError.invalidConfiguration("Custom editor command is empty")
             }
             try spawnCustomCommand(command, path: path)
+        }
+    }
+
+    private func preferredAppOpenArguments(for editor: DefaultEditor, path: String) -> [String]? {
+        switch editor {
+        case .code:
+            return ["-b", "com.microsoft.VSCode", path]
+        case .cursor:
+            return ["-a", "Cursor", path]
+        default:
+            return nil
         }
     }
 

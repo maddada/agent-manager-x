@@ -160,10 +160,12 @@ struct SettingsSheetView: View {
                 .textFieldStyle(.roundedBorder)
             }
 
-            Toggle("Experimental VS Code opening", isOn: Binding(
-                get: { store.experimentalVSCodeSessionOpening },
-                set: { store.updateExperimentalVSCodeSessionOpening($0) }
-            ))
+            if store.defaultEditor == .code || store.defaultEditor == .cursor {
+                Toggle("Use slower but more compatible method to switch to project", isOn: Binding(
+                    get: { store.useSlowerCompatibleProjectSwitching },
+                    set: { store.updateUseSlowerCompatibleProjectSwitching($0) }
+                ))
+            }
         }
     }
 

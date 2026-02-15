@@ -14,7 +14,7 @@ final class SettingsStore {
     static let defaultTerminalValue: DefaultTerminal = .terminal
     static let defaultCardClickAction: CardClickAction = .editor
     static let defaultDisplayMode: DisplayMode = .masonry
-    static let defaultExperimentalVSCodeSessionOpening = false
+    static let defaultUseSlowerCompatibleProjectSwitching = false
     static let defaultTheme: ThemePreference = .dark
     static let defaultBackgroundImage = "https://images.pexels.com/photos/28428592/pexels-photo-28428592.jpeg"
     static let defaultOverlayOpacity = 88
@@ -91,14 +91,20 @@ final class SettingsStore {
         set { defaults.set(newValue.rawValue, forKey: SettingsKeys.displayMode) }
     }
 
-    var experimentalVSCodeSessionOpening: Bool {
+    var useSlowerCompatibleProjectSwitching: Bool {
         get {
-            guard defaults.object(forKey: SettingsKeys.experimentalVSCodeSessionOpening) != nil else {
-                return Self.defaultExperimentalVSCodeSessionOpening
+            if defaults.object(forKey: SettingsKeys.useSlowerCompatibleProjectSwitching) != nil {
+                return defaults.bool(forKey: SettingsKeys.useSlowerCompatibleProjectSwitching)
             }
-            return defaults.bool(forKey: SettingsKeys.experimentalVSCodeSessionOpening)
+
+            // Backward compatibility for older settings where `true` meant app-based opening.
+            if defaults.object(forKey: SettingsKeys.legacyExperimentalVSCodeSessionOpening) != nil {
+                return !defaults.bool(forKey: SettingsKeys.legacyExperimentalVSCodeSessionOpening)
+            }
+
+            return Self.defaultUseSlowerCompatibleProjectSwitching
         }
-        set { defaults.set(newValue, forKey: SettingsKeys.experimentalVSCodeSessionOpening) }
+        set { defaults.set(newValue, forKey: SettingsKeys.useSlowerCompatibleProjectSwitching) }
     }
 
     var theme: ThemePreference {

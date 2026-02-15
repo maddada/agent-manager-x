@@ -28,7 +28,7 @@ final class AppStore: ObservableObject {
     @Published var cardClickAction: CardClickAction
     @Published var defaultEditor: DefaultEditor
     @Published var customEditorCommand: String
-    @Published var experimentalVSCodeSessionOpening: Bool
+    @Published var useSlowerCompatibleProjectSwitching: Bool
     @Published var defaultTerminal: DefaultTerminal
     @Published var customTerminalCommand: String
     @Published var globalHotkey: String
@@ -98,7 +98,7 @@ final class AppStore: ObservableObject {
         cardClickAction = settings.cardClickAction
         defaultEditor = settings.defaultEditor
         customEditorCommand = settings.customEditorCommand
-        experimentalVSCodeSessionOpening = settings.experimentalVSCodeSessionOpening
+        useSlowerCompatibleProjectSwitching = settings.useSlowerCompatibleProjectSwitching
         defaultTerminal = settings.defaultTerminal
         customTerminalCommand = settings.customTerminalCommand
         globalHotkey = settings.globalHotkey
@@ -420,10 +420,10 @@ final class AppStore: ObservableObject {
         settings.customEditorCommand = value
     }
 
-    func updateExperimentalVSCodeSessionOpening(_ enabled: Bool) {
-        experimentalVSCodeSessionOpening = enabled
-        settings.experimentalVSCodeSessionOpening = enabled
-        miniViewerController.setExperimentalVSCodeSessionOpening(enabled)
+    func updateUseSlowerCompatibleProjectSwitching(_ enabled: Bool) {
+        useSlowerCompatibleProjectSwitching = enabled
+        settings.useSlowerCompatibleProjectSwitching = enabled
+        miniViewerController.setUseSlowerCompatibleProjectSwitching(enabled)
     }
 
     func updateDefaultTerminal(_ value: DefaultTerminal) {
@@ -604,7 +604,7 @@ final class AppStore: ObservableObject {
     private func applyMiniViewerSettings() {
         miniViewerController.setSide(miniViewerSide)
         miniViewerController.setUIElementSize(miniViewerUIElementSize)
-        miniViewerController.setExperimentalVSCodeSessionOpening(experimentalVSCodeSessionOpening)
+        miniViewerController.setUseSlowerCompatibleProjectSwitching(useSlowerCompatibleProjectSwitching)
     }
 
     private func refreshNotificationState() {
@@ -694,8 +694,7 @@ final class AppStore: ObservableObject {
         do {
             try coreActionsService.openInEditor(
                 path: path,
-                editor: defaultEditor,
-                experimentalVSCodeSessionOpening: experimentalVSCodeSessionOpening,
+                useSlowerCompatibleProjectSwitching: useSlowerCompatibleProjectSwitching,
                 projectName: projectName
             )
         } catch {
