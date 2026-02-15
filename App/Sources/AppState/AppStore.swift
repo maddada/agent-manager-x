@@ -37,6 +37,7 @@ final class AppStore: ObservableObject {
     @Published var miniViewerShowOnStart: Bool
     @Published var mainAppUIElementSize: UIElementSize
     @Published var miniViewerUIElementSize: UIElementSize
+    @Published var notificationSound: NotificationSound
 
     @Published private(set) var notificationState = NotificationState()
     @Published private(set) var gitDiffStatsByProjectPath: [String: GitDiffStats] = [:]
@@ -107,6 +108,7 @@ final class AppStore: ObservableObject {
         miniViewerShowOnStart = settings.miniViewerShowOnStart
         mainAppUIElementSize = settings.mainAppUIElementSize
         miniViewerUIElementSize = settings.miniViewerUIElementSize
+        notificationSound = settings.notificationSound
     }
 
     func start() {
@@ -338,7 +340,8 @@ final class AppStore: ObservableObject {
 
         do {
             let nextValue = !notificationState.bellModeEnabled
-            try notificationService.setBellMode(enabled: nextValue)
+            let soundPath = selectedNotificationSoundPath()
+            try notificationService.setBellMode(enabled: nextValue, bellSoundPath: soundPath)
             notificationState.bellModeEnabled = nextValue
             showConfirmation(nextValue ? "Bell mode enabled." : "Voice mode enabled.")
         } catch {
@@ -436,6 +439,39 @@ final class AppStore: ObservableObject {
         settings.customTerminalCommand = value
     }
 
+    func updateNotificationSound(_ value: NotificationSound) {
+        notificationSound = value
+        settings.notificationSound = value
+
+        guard notificationState.installState == .installed,
+              notificationState.bellModeEnabled else {
+            return
+        }
+
+        do {
+            try notificationService.setBellMode(
+                enabled: true,
+                bellSoundPath: selectedNotificationSoundPath()
+            )
+            showConfirmation("Notification sound updated.")
+        } catch {
+            settingsError = error.localizedDescription
+        }
+    }
+
+    func previewNotificationSound() {
+        guard let soundPath = selectedNotificationSoundPath() else {
+            settingsError = "Selected notification sound is unavailable."
+            return
+        }
+
+        do {
+            try notificationService.playNotificationSoundPreview(soundPath: soundPath)
+        } catch {
+            settingsError = error.localizedDescription
+        }
+    }
+
     func saveGlobalHotkey(_ shortcut: String) {
         settingsError = nil
         let normalized = shortcut.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -502,6 +538,44 @@ final class AppStore: ObservableObject {
     func updateMainAppUIElementSize(_ value: UIElementSize) {
         mainAppUIElementSize = value
         settings.mainAppUIElementSize = value
+    }
+
+    func increaseMainAppUIElementSizeFromShortcut() {
+        guard isMainWindowContextActiveForShortcuts() else {
+            return
+        }
+        stepMainAppUIElementSize(by: 1)
+    }
+
+    func decreaseMainAppUIElementSizeFromShortcut() {
+        guard isMainWindowContextActiveForShortcuts() else {
+            return
+        }
+        stepMainAppUIElementSize(by: -1)
+    }
+
+    func resetMainAppUIElementSizeToMediumFromShortcut() {
+        guard isMainWindowContextActiveForShortcuts() else {
+            return
+        }
+
+        updateMainAppUIElementSize(.medium)
+    }
+
+    func openProjectFromShortcutNumber(_ number: Int) {
+        guard isMainWindowContextActiveForShortcuts(),
+              (1...9).contains(number) else {
+            return
+        }
+
+        let groups = ProjectGroup.grouped(from: sessions)
+        let index = number - 1
+        guard groups.indices.contains(index) else {
+            return
+        }
+
+        let group = groups[index]
+        openProject(path: group.projectPath, projectName: group.projectName)
     }
 
     func updateMiniViewerUIElementSize(_ value: UIElementSize) {
@@ -632,6 +706,48 @@ final class AppStore: ObservableObject {
         notificationState.isLoading = false
     }
 
+    private func selectedNotificationSoundPath() -> String? {
+        let filename = notificationSound.filename
+        let baseName = (filename as NSString).deletingPathExtension
+        let fileExtension = (filename as NSString).pathExtension
+        let systemPath = "/System/Library/Sounds/\(filename)"
+
+        if let soundsSubdirectoryURL = Bundle.main.url(
+            forResource: baseName,
+            withExtension: fileExtension,
+            subdirectory: "sounds"
+        ) {
+            return soundsSubdirectoryURL.path
+        }
+
+        if let rootURL = Bundle.main.url(
+            forResource: baseName,
+            withExtension: fileExtension
+        ) {
+            return rootURL.path
+        }
+
+        guard let resourceURL = Bundle.main.resourceURL else {
+            return nil
+        }
+
+        let nestedPath = resourceURL.appendingPathComponent("sounds/\(filename)").path
+        if FileManager.default.fileExists(atPath: nestedPath) {
+            return nestedPath
+        }
+
+        let rootPath = resourceURL.appendingPathComponent(filename).path
+        if FileManager.default.fileExists(atPath: rootPath) {
+            return rootPath
+        }
+
+        if FileManager.default.fileExists(atPath: systemPath) {
+            return systemPath
+        }
+
+        return nil
+    }
+
     private func startPolling() {
         pollTimer?.invalidate()
         pollTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { [weak self] _ in
@@ -720,6 +836,37 @@ final class AppStore: ObservableObject {
         }
 
         return NSApplication.shared.windows.first
+    }
+
+    private func isMainWindowContextActiveForShortcuts() -> Bool {
+        guard NSApplication.shared.isActive,
+              let mainWindow else {
+            return false
+        }
+
+        if mainWindow.isKeyWindow {
+            return true
+        }
+
+        guard let keyWindow = NSApplication.shared.keyWindow else {
+            return false
+        }
+
+        return keyWindow.sheetParent == mainWindow
+    }
+
+    private func stepMainAppUIElementSize(by offset: Int) {
+        let sizes = UIElementSize.allCases
+        guard let currentIndex = sizes.firstIndex(of: mainAppUIElementSize) else {
+            return
+        }
+
+        let nextIndex = min(max(currentIndex + offset, 0), sizes.count - 1)
+        guard nextIndex != currentIndex else {
+            return
+        }
+
+        updateMainAppUIElementSize(sizes[nextIndex])
     }
 
     private func setActionError(_ error: Error) {
