@@ -21,6 +21,7 @@ final class NotificationService {
     private let fileManager: FileManager
     private let homeDirectoryURL: URL
     private let notificationScriptFilename = "notify-local-tts.sh"
+    private let notificationConfigFilename = "notification.conf"
     private let afplayExecutablePath = "/usr/bin/afplay"
     private var previewProcess: Process?
 
@@ -49,18 +50,12 @@ final class NotificationService {
     }
 
     func checkBellMode() throws -> Bool {
-        let scriptPaths = installedNotificationScriptPaths()
-        guard !scriptPaths.isEmpty else {
+        guard fileManager.fileExists(atPath: claudeNotificationConfigPath.path) else {
             return false
         }
 
-        return try scriptPaths.allSatisfy { path in
-            guard fileManager.fileExists(atPath: path.path) else {
-                return false
-            }
-            let content = try String(contentsOf: path, encoding: .utf8)
-            return isBellScript(content)
-        }
+        let content = try String(contentsOf: claudeNotificationConfigPath, encoding: .utf8)
+        return content.contains("mode=bell")
     }
 
     func setBellMode(enabled: Bool, bellSoundPath: String? = nil) throws {
@@ -69,15 +64,19 @@ final class NotificationService {
         }
 
         let soundPath = bellSoundPath ?? NotificationScripts.defaultBellSoundPath
-        let claudeScript = enabled ? NotificationScripts.claudeBellScript(soundPath: soundPath) : NotificationScripts.claudeVoiceScript
-        try writeExecutableScript(claudeScript, to: claudeScriptPath)
+        let configContent = notificationConfigContent(
+            mode: enabled ? "bell" : "voice",
+            soundPath: soundPath
+        )
+
+        try configContent.write(to: claudeNotificationConfigPath, atomically: true, encoding: .utf8)
 
         for root in codexDirectoryPaths {
-            let hooksDirectory = codexHooksDirectoryPath(for: root)
-            try ensureDirectoryExists(at: hooksDirectory)
-
-            let codexScript = enabled ? NotificationScripts.codexBellScript(soundPath: soundPath) : NotificationScripts.codexVoiceScript
-            try writeExecutableScript(codexScript, to: codexScriptPath(for: root))
+            try configContent.write(
+                to: codexNotificationConfigPath(for: root),
+                atomically: true,
+                encoding: .utf8
+            )
         }
     }
 
@@ -140,12 +139,25 @@ final class NotificationService {
 
     private func installClaudeNotificationSystem() throws {
         try ensureDirectoryExists(at: claudeHooksDirectoryPath)
-        try writeExecutableScript(NotificationScripts.claudeVoiceScript, to: claudeScriptPath)
+        try writeExecutableScript(NotificationScripts.claudeUnifiedScript, to: claudeScriptPath)
+
+        let configContent = notificationConfigContent(
+            mode: "voice",
+            soundPath: NotificationScripts.defaultBellSoundPath
+        )
+        try configContent.write(to: claudeNotificationConfigPath, atomically: true, encoding: .utf8)
 
         try backupFileIfExists(at: claudeSettingsPath)
         var settings = try readClaudeSettingsJSONIfPresent() ?? [:]
         ensureNotificationStopHook(in: &settings)
         try writeClaudeSettingsJSON(settings)
+
+        for profileSettingsPath in claudeProfileSettingsPaths {
+            try backupFileIfExists(at: profileSettingsPath)
+            var profileSettings = try readSettingsJSON(at: profileSettingsPath)
+            ensureNotificationStopHook(in: &profileSettings)
+            try writeSettingsJSON(profileSettings, to: profileSettingsPath)
+        }
 
         try backupFileIfExists(at: claudeMDPath)
         try appendVoiceInstructionsIfNeeded(at: claudeMDPath)
@@ -162,7 +174,14 @@ final class NotificationService {
             try ensureDirectoryExists(at: hooksDirectory)
 
             let scriptPath = codexScriptPath(for: root)
-            try writeExecutableScript(NotificationScripts.codexVoiceScript, to: scriptPath)
+            try writeExecutableScript(NotificationScripts.codexUnifiedScript, to: scriptPath)
+
+            let notifConfigPath = codexNotificationConfigPath(for: root)
+            let notifConfigContent = notificationConfigContent(
+                mode: "voice",
+                soundPath: NotificationScripts.defaultBellSoundPath
+            )
+            try notifConfigContent.write(to: notifConfigPath, atomically: true, encoding: .utf8)
 
             let configPath = codexConfigPath(for: root)
             var configContent = ""
@@ -194,6 +213,13 @@ final class NotificationService {
             try writeClaudeSettingsJSON(settings)
         }
 
+        for profileSettingsPath in claudeProfileSettingsPaths {
+            try backupFileIfExists(at: profileSettingsPath)
+            var profileSettings = try readSettingsJSON(at: profileSettingsPath)
+            removeNotificationStopHooks(from: &profileSettings)
+            try writeSettingsJSON(profileSettings, to: profileSettingsPath)
+        }
+
         if fileManager.fileExists(atPath: claudeMDPath.path) {
             try backupFileIfExists(at: claudeMDPath)
             let content = try String(contentsOf: claudeMDPath, encoding: .utf8)
@@ -215,6 +241,10 @@ final class NotificationService {
         if fileManager.fileExists(atPath: claudeScriptPath.path) {
             try fileManager.removeItem(at: claudeScriptPath)
         }
+
+        if fileManager.fileExists(atPath: claudeNotificationConfigPath.path) {
+            try fileManager.removeItem(at: claudeNotificationConfigPath)
+        }
     }
 
     private func uninstallCodexNotificationSystem() throws {
@@ -232,6 +262,11 @@ final class NotificationService {
             let scriptPath = codexScriptPath(for: root)
             if fileManager.fileExists(atPath: scriptPath.path) {
                 try fileManager.removeItem(at: scriptPath)
+            }
+
+            let notifConfigPath = codexNotificationConfigPath(for: root)
+            if fileManager.fileExists(atPath: notifConfigPath.path) {
+                try fileManager.removeItem(at: notifConfigPath)
             }
         }
 
@@ -265,6 +300,10 @@ final class NotificationService {
         claudeHooksDirectoryPath.appendingPathComponent(notificationScriptFilename)
     }
 
+    private var claudeNotificationConfigPath: URL {
+        claudeHooksDirectoryPath.appendingPathComponent(notificationConfigFilename)
+    }
+
     private var claudeSettingsPath: URL {
         claudeDirectoryPath.appendingPathComponent("settings.json")
     }
@@ -282,6 +321,13 @@ final class NotificationService {
 
     private var claudeProfileMDPaths: [URL] {
         claudeProfileDirectoryPaths.map { $0.appendingPathComponent("CLAUDE.md") }
+    }
+
+    private var claudeProfileSettingsPaths: [URL] {
+        claudeProfileDirectoryPaths.compactMap { dir in
+            let path = dir.appendingPathComponent("settings.json")
+            return fileManager.fileExists(atPath: path.path) ? path : nil
+        }
     }
 
     private var codexDirectoryPaths: [URL] {
@@ -308,25 +354,12 @@ final class NotificationService {
         root.appendingPathComponent("config.toml")
     }
 
-    private func installedNotificationScriptPaths() -> [URL] {
-        var paths: [URL] = []
-        var seen = Set<String>()
-
-        if fileManager.fileExists(atPath: claudeScriptPath.path), seen.insert(claudeScriptPath.path).inserted {
-            paths.append(claudeScriptPath)
-        }
-
-        for path in codexDirectoryPaths.map(codexScriptPath(for:)) where fileManager.fileExists(atPath: path.path) {
-            if seen.insert(path.path).inserted {
-                paths.append(path)
-            }
-        }
-
-        return paths
+    private func codexNotificationConfigPath(for root: URL) -> URL {
+        codexHooksDirectoryPath(for: root).appendingPathComponent(notificationConfigFilename)
     }
 
-    private func isBellScript(_ content: String) -> Bool {
-        content.contains("afplay") && !content.contains("say \"$SUMMARY\"")
+    private func notificationConfigContent(mode: String, soundPath: String) -> String {
+        "mode=\(mode)\nsound_path=\(soundPath)\n"
     }
 
     private func readClaudeSettingsJSONIfPresent() throws -> [String: Any]? {
@@ -346,8 +379,21 @@ final class NotificationService {
     }
 
     private func writeClaudeSettingsJSON(_ settings: [String: Any]) throws {
+        try writeSettingsJSON(settings, to: claudeSettingsPath)
+    }
+
+    private func readSettingsJSON(at path: URL) throws -> [String: Any] {
+        let data = try Data(contentsOf: path)
+        let raw = try JSONSerialization.jsonObject(with: data, options: [])
+        guard let settings = raw as? [String: Any] else {
+            throw NotificationServiceError.invalidSettingsFormat
+        }
+        return settings
+    }
+
+    private func writeSettingsJSON(_ settings: [String: Any], to path: URL) throws {
         let data = try JSONSerialization.data(withJSONObject: settings, options: [.prettyPrinted, .sortedKeys])
-        try data.write(to: claudeSettingsPath, options: .atomic)
+        try data.write(to: path, options: .atomic)
     }
 
     private func writeExecutableScript(_ content: String, to path: URL) throws {
@@ -610,53 +656,84 @@ final class NotificationService {
 }
 
 private enum NotificationScripts {
-    static let claudeVoiceScript = #"""
+    static let claudeUnifiedScript = #"""
 #!/bin/bash
-# Voice notification script for Claude Code
-# Reads hook metadata from stdin, loads transcript, and speaks the "Summary:" line via TTS
+# Notification script for Claude Code
+# Reads mode from notification.conf, extracts Summary from transcript,
+# and either speaks it (voice) or plays a bell sound (bell).
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+CONFIG_FILE="$SCRIPT_DIR/notification.conf"
+
+MODE="voice"
+SOUND_PATH="/System/Library/Sounds/Glass.aiff"
+
+if [ -f "$CONFIG_FILE" ]; then
+    while IFS='=' read -r key value; do
+        case "$key" in
+            mode) MODE="$value" ;;
+            sound_path) SOUND_PATH="$value" ;;
+        esac
+    done < "$CONFIG_FILE"
+fi
 
 # Read hook metadata from stdin
 INPUT=$(cat)
-
-# Extract transcript_path from the hook metadata
 TRANSCRIPT_PATH=$(echo "$INPUT" | jq -r '.transcript_path // empty')
 
 if [ -z "$TRANSCRIPT_PATH" ] || [ ! -f "$TRANSCRIPT_PATH" ]; then
     exit 0
 fi
 
-# Read the last assistant message from the JSONL transcript
-# The format uses "type": "assistant" and content is at .message.content
-CONTENT=$(tac "$TRANSCRIPT_PATH" | while read -r line; do
-    msg_type=$(echo "$line" | jq -r '.type // empty')
-    if [ "$msg_type" = "assistant" ]; then
-        # Extract content from .message.content array
-        echo "$line" | jq -r '
-            .message.content |
-            if type == "array" then
-                map(select(.type == "text") | .text) | join("\n")
-            elif type == "string" then
-                .
-            else
-                empty
-            end
-        '
-        break
-    fi
-done)
+# Extract the last assistant message text from the JSONL transcript
+CONTENT=$(jq -s -r '
+    [.[] | select(.type == "assistant")] | last |
+    .message.content |
+    if type == "array" then
+        map(select(.type == "text") | .text) | join("\n")
+    elif type == "string" then
+        .
+    else
+        empty
+    end
+' "$TRANSCRIPT_PATH")
 
 # Look for last Summary: line (case insensitive)
 SUMMARY=$(echo "$CONTENT" | grep -i "^Summary:" | tail -1 | sed 's/^[Ss]ummary:[[:space:]]*//')
 
 if [ -n "$SUMMARY" ]; then
-    say "$SUMMARY"
+    if [ "$MODE" = "bell" ]; then
+        if [ -f "$SOUND_PATH" ]; then
+            afplay "$SOUND_PATH"
+        else
+            afplay /System/Library/Sounds/Glass.aiff
+        fi
+    else
+        say "$SUMMARY"
+    fi
 fi
 """#
 
-    static let codexVoiceScript = #"""
+    static let codexUnifiedScript = #"""
 #!/bin/bash
-# Voice notification script for Codex CLI
-# Reads JSON payload from argv/stdin and speaks the "Summary:" line via TTS
+# Notification script for Codex CLI
+# Reads mode from notification.conf, extracts Summary from payload,
+# and either speaks it (voice) or plays a bell sound (bell).
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+CONFIG_FILE="$SCRIPT_DIR/notification.conf"
+
+MODE="voice"
+SOUND_PATH="/System/Library/Sounds/Glass.aiff"
+
+if [ -f "$CONFIG_FILE" ]; then
+    while IFS='=' read -r key value; do
+        case "$key" in
+            mode) MODE="$value" ;;
+            sound_path) SOUND_PATH="$value" ;;
+        esac
+    done < "$CONFIG_FILE"
+fi
 
 PAYLOAD="$1"
 
@@ -677,7 +754,15 @@ CONTENT=$(echo "$PAYLOAD" | jq -r '."last-assistant-message" // empty' 2>/dev/nu
 SUMMARY=$(echo "$CONTENT" | grep -i "^Summary:" | tail -1 | sed 's/^[Ss]ummary:[[:space:]]*//')
 
 if [ -n "$SUMMARY" ]; then
-    say "$SUMMARY"
+    if [ "$MODE" = "bell" ]; then
+        if [ -f "$SOUND_PATH" ]; then
+            afplay "$SOUND_PATH"
+        else
+            afplay /System/Library/Sounds/Glass.aiff
+        fi
+    else
+        say "$SUMMARY"
+    fi
 fi
 """#
 
@@ -696,95 +781,4 @@ When completing a task and handing control back to the user, the last line of th
 """#
 
     static let defaultBellSoundPath = "/System/Library/Sounds/Glass.aiff"
-
-    static func claudeBellScript(soundPath: String) -> String {
-        let escapedSoundPath = shellSingleQuoted(soundPath)
-        return """
-#!/bin/bash
-# Voice notification script for Claude Code (Bell Mode)
-# Reads hook metadata from stdin, loads transcript, and plays a bell if Summary found
-
-SOUND_PATH='\(escapedSoundPath)'
-
-# Read hook metadata from stdin
-INPUT=$(cat)
-
-# Extract transcript_path from the hook metadata
-TRANSCRIPT_PATH=$(echo "$INPUT" | jq -r '.transcript_path // empty')
-
-if [ -z "$TRANSCRIPT_PATH" ] || [ ! -f "$TRANSCRIPT_PATH" ]; then
-    exit 0
-fi
-
-# Read the last assistant message from the JSONL transcript
-CONTENT=$(tac "$TRANSCRIPT_PATH" | while read -r line; do
-    msg_type=$(echo "$line" | jq -r '.type // empty')
-    if [ "$msg_type" = "assistant" ]; then
-        echo "$line" | jq -r '
-            .message.content |
-            if type == "array" then
-                map(select(.type == "text") | .text) | join("\n")
-            elif type == "string" then
-                .
-            else
-                empty
-            end
-        '
-        break
-    fi
-done)
-
-# Look for last Summary: line (case insensitive)
-SUMMARY=$(echo "$CONTENT" | grep -i "^Summary:" | tail -1)
-
-if [ -n "$SUMMARY" ]; then
-    if [ -f "$SOUND_PATH" ]; then
-        afplay "$SOUND_PATH"
-    else
-        afplay \(defaultBellSoundPath)
-    fi
-fi
-"""
-    }
-
-    static func codexBellScript(soundPath: String) -> String {
-        let escapedSoundPath = shellSingleQuoted(soundPath)
-        return """
-#!/bin/bash
-# Voice notification script for Codex CLI (Bell Mode)
-# Reads JSON payload from argv/stdin and plays a bell if Summary found
-
-SOUND_PATH='\(escapedSoundPath)'
-
-PAYLOAD="$1"
-
-if [ -z "$PAYLOAD" ] && [ ! -t 0 ]; then
-    PAYLOAD=$(cat)
-fi
-
-if [ -z "$PAYLOAD" ]; then
-    exit 0
-fi
-
-EVENT_TYPE=$(echo "$PAYLOAD" | jq -r '.type // empty' 2>/dev/null)
-if [ "$EVENT_TYPE" != "agent-turn-complete" ]; then
-    exit 0
-fi
-
-CONTENT=$(echo "$PAYLOAD" | jq -r '."last-assistant-message" // empty' 2>/dev/null)
-SUMMARY=$(echo "$CONTENT" | grep -i "^Summary:" | tail -1)
-
-if [ -n "$SUMMARY" ]; then
-    if [ -f "$SOUND_PATH" ]; then
-        afplay "$SOUND_PATH"
-    else
-        afplay \(defaultBellSoundPath)
-    fi
-fi
-"""
-    }
-
-    private static func shellSingleQuoted(_ value: String) -> String {
-        value.replacingOccurrences(of: "'", with: "'\"'\"'")
-    }
 }
