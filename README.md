@@ -13,7 +13,7 @@ Please star his repo here: https://github.com/ozankasikci/agent-sessions.
 ## Installation
 
 ```bash
-brew install --cask maddada/tap/agent-manager-x-swift
+brew install --cask maddada/tap/agent-manager-x
 ```
 
 Or download the latest DMG from [GitHub Releases](https://github.com/maddada/agent-manager-x-swift/releases).
