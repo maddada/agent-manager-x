@@ -17,6 +17,7 @@ final class AppStore: ObservableObject {
     @Published private(set) var errorMessage: String?
 
     @Published var settingsPresented = false
+    @Published var historyPresented = false
     @Published var settingsError: String?
     @Published var settingsConfirmation: String?
 
@@ -598,6 +599,14 @@ final class AppStore: ObservableObject {
 
     func hideSettings() {
         settingsPresented = false
+    }
+
+    func showHistory() {
+        historyPresented = true
+    }
+
+    func hideHistory() {
+        historyPresented = false
     }
 
     func toggleMainWindowVisibility() {

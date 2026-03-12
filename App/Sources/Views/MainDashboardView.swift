@@ -26,6 +26,10 @@ struct MainDashboardView: View {
             SettingsSheetView()
                 .environmentObject(store)
         }
+        .sheet(isPresented: $store.historyPresented) {
+            HistorySheetView()
+                .environmentObject(store)
+        }
         .background(
             WindowAccessor { window in
                 store.attachMainWindow(window)
@@ -201,6 +205,16 @@ private struct AppHeaderView: View {
                 .focusable(false)
                 .pointerCursor()
                 .hoverPopover(store.displayMode == .list ? "Switch to grid" : "Switch to list")
+
+                Button {
+                    store.showHistory()
+                } label: {
+                    Image(systemName: "clock.arrow.circlepath")
+                }
+                .buttonStyle(.borderless)
+                .focusable(false)
+                .pointerCursor()
+                .hoverPopover("Prompts & Responses History")
 
                 Button {
                     store.showSettings()
