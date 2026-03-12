@@ -627,6 +627,9 @@ final class HistoryService {
     ) -> [HistoryProject] {
         var byPath: [String: [HistoryConversation]] = [:]
         for entry in entries {
+            guard !SessionParsingSupport.shouldHideProject(at: entry.projectPath) else {
+                continue
+            }
             byPath[entry.projectPath, default: []].append(entry.conversation)
         }
 

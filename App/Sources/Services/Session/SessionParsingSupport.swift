@@ -1,5 +1,9 @@
 import Foundation
 
+private let hiddenProjectNames: Set<String> = [
+    "claudeprobe"
+]
+
 struct AgentProcess {
     let pid: Int
     let cpuUsage: Double
@@ -579,6 +583,14 @@ enum SessionParsingSupport {
         let url = URL(fileURLWithPath: path)
         let name = url.lastPathComponent
         return name.isEmpty ? "Unknown" : name
+    }
+
+    static func shouldHideProject(named projectName: String) -> Bool {
+        hiddenProjectNames.contains(projectName.trimmingCharacters(in: .whitespacesAndNewlines).lowercased())
+    }
+
+    static func shouldHideProject(at path: String) -> Bool {
+        shouldHideProject(named: projectName(from: path))
     }
 
     static func convertPathToClaudeDirectoryName(_ path: String) -> String {

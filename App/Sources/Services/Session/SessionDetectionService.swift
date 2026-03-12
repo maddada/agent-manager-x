@@ -19,7 +19,12 @@ final class SessionDetectionService {
     }
 
     func getAllSessions() -> SessionsResponse {
-        let allSessions = detectors.flatMap { $0.detectSessions() }
+        let allSessions = detectors
+            .flatMap { $0.detectSessions() }
+            .filter { session in
+                !SessionParsingSupport.shouldHideProject(named: session.projectName)
+                    && !SessionParsingSupport.shouldHideProject(at: session.projectPath)
+            }
 
         var foreground: [Session] = []
         var background: [Session] = []
