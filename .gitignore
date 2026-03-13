@@ -11,6 +11,8 @@
 build/
 DerivedData/
 .derived-data/
+.derived-data-release-*/
+.release-homebrew-tap/
 *.moved-aside
 skip
 
