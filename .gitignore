@@ -10,6 +10,7 @@
 # Build artifacts
 build/
 DerivedData/
+.derived-data/
 *.moved-aside
 skip
 

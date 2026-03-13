@@ -4,6 +4,8 @@ import SwiftUI
 
 @MainActor
 final class AppStore: ObservableObject {
+    private static let mainWindowFrameAutosaveName = NSWindow.FrameAutosaveName("agent-manager-x-main-window")
+
     @Published private(set) var sessions: [Session] = []
     @Published private(set) var backgroundSessions: [Session] = []
     @Published private(set) var totalCount = 0
@@ -58,6 +60,7 @@ final class AppStore: ObservableObject {
     private var lastOrderedForegroundSessions: [Session] = []
     private var gitDiffCache: [String: CachedDiffStats] = [:]
     private weak var mainWindow: NSWindow?
+    private var configuredMainWindowID: ObjectIdentifier?
     private var confirmationResetTask: DispatchWorkItem?
     private let refreshQueue = DispatchQueue(label: "AppStore.refresh", qos: .userInitiated)
     private let gitDiffStatsQueue = DispatchQueue(label: "AppStore.gitDiffStats", qos: .utility)
@@ -146,7 +149,21 @@ final class AppStore: ObservableObject {
     }
 
     func attachMainWindow(_ window: NSWindow?) {
+        guard let window else {
+            mainWindow = nil
+            configuredMainWindowID = nil
+            return
+        }
+
         mainWindow = window
+
+        let windowID = ObjectIdentifier(window)
+        guard configuredMainWindowID != windowID else {
+            return
+        }
+
+        configuredMainWindowID = windowID
+        configureMainWindow(window)
     }
 
     func refresh(showInitialLoading: Bool = false, fromTimer: Bool = false) {
@@ -853,6 +870,10 @@ final class AppStore: ObservableObject {
         }
 
         return NSApplication.shared.windows.first
+    }
+
+    private func configureMainWindow(_ window: NSWindow) {
+        _ = window.setFrameAutosaveName(Self.mainWindowFrameAutosaveName)
     }
 
     private func isMainWindowContextActiveForShortcuts() -> Bool {
