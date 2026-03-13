@@ -1032,14 +1032,22 @@ final class MiniViewerAppDelegate: NSObject, NSApplicationDelegate {
 
         let pointer = NSEvent.mouseLocation
         let frame = panel.frame
-        let withinVerticalRange = pointer.y >= frame.minY - 10 && pointer.y <= frame.maxY + 10
+        let hoverInsetTop: CGFloat = -3
+        let hoverInsetBottom: CGFloat = -30
+        let hoverInsetHorizontal: CGFloat = -3
+        let edgeTriggerWidth: CGFloat = 3
+        let withinVerticalRange = pointer.y >= frame.minY - hoverInsetBottom && pointer.y <= frame.maxY + hoverInsetTop
         if !withinVerticalRange {
             model.setHovering(false)
             return
         }
 
-        let edgeTriggerWidth: CGFloat = 10
-        let stickyBounds = frame.insetBy(dx: -10, dy: -10)
+        let stickyBounds = NSRect(
+            x: frame.minX - hoverInsetHorizontal,
+            y: frame.minY - hoverInsetBottom,
+            width: frame.width + (hoverInsetHorizontal * 2),
+            height: frame.height + hoverInsetTop + hoverInsetBottom
+        )
         let edgeTriggered: Bool = {
             switch model.side {
             case .left:
