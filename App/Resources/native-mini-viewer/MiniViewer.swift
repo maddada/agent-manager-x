@@ -37,11 +37,11 @@ private enum UIElementSize: String, Codable {
     var rightExpandedLeftShift: CGFloat {
         switch self {
         case .small:
-            return 45
+            return 0 // 45
         case .medium:
-            return 90
+            return 0 // 90
         case .large:
-            return 150
+            return 0 // 150
         }
     }
 }
