@@ -315,7 +315,7 @@ struct SettingsSheetView: View {
                     get: { store.miniViewerUIElementSize },
                     set: { store.updateMiniViewerUIElementSize($0) }
                 )) {
-                    ForEach(UIElementSize.allCases, id: \.rawValue) { size in
+                    ForEach(UIElementSize.miniViewerCases, id: \.rawValue) { size in
                         Text(size.displayName).tag(size)
                     }
                 }

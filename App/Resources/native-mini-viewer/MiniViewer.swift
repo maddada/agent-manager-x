@@ -11,7 +11,6 @@ private enum UIElementSize: String, Codable {
     case small
     case medium
     case large
-    case extraLarge
 
     var fontScale: CGFloat {
         switch self {
@@ -21,8 +20,6 @@ private enum UIElementSize: String, Codable {
             return 1.30
         case .large:
             return 1.65
-        case .extraLarge:
-            return 2.0
         }
     }
 
@@ -34,8 +31,17 @@ private enum UIElementSize: String, Codable {
             return 1.18
         case .large:
             return 1.38
-        case .extraLarge:
-            return 1.62
+        }
+    }
+
+    var rightExpandedLeftShift: CGFloat {
+        switch self {
+        case .small:
+            return 45
+        case .medium:
+            return 90
+        case .large:
+            return 150
         }
     }
 }
@@ -942,7 +948,13 @@ final class MiniViewerAppDelegate: NSObject, NSApplicationDelegate {
 
         let width = model.isExpanded ? expandedWidth : collapsedWidth
         let height = desiredHeight(for: model.projects)
-        let x = model.side == .left ? screenFrame.minX : screenFrame.maxX - width
+        let baseX = model.side == .left ? screenFrame.minX : screenFrame.maxX - width
+        let x: CGFloat
+        if model.isExpanded, model.side == .right {
+            x = baseX - model.uiElementSize.rightExpandedLeftShift
+        } else {
+            x = baseX
+        }
         let centeredY = screenFrame.midY - (height / 2.0)
         let y: CGFloat
         if height <= screenFrame.height {

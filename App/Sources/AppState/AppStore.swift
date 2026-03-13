@@ -587,9 +587,10 @@ final class AppStore: ObservableObject {
     }
 
     func updateMiniViewerUIElementSize(_ value: UIElementSize) {
-        miniViewerUIElementSize = value
-        settings.miniViewerUIElementSize = value
-        miniViewerController.setUIElementSize(value)
+        let clampedValue = value.clampedForMiniViewer
+        miniViewerUIElementSize = clampedValue
+        settings.miniViewerUIElementSize = clampedValue
+        miniViewerController.setUIElementSize(clampedValue)
     }
 
     func showSettings() {

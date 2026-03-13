@@ -58,8 +58,8 @@ final class SettingsStore {
     }
 
     var miniViewerUIElementSize: UIElementSize {
-        get { enumValue(forKey: SettingsKeys.miniViewerUIElementSize, default: Self.defaultMiniViewerUIElementSize) }
-        set { defaults.set(newValue.rawValue, forKey: SettingsKeys.miniViewerUIElementSize) }
+        get { enumValue(forKey: SettingsKeys.miniViewerUIElementSize, default: Self.defaultMiniViewerUIElementSize).clampedForMiniViewer }
+        set { defaults.set(newValue.clampedForMiniViewer.rawValue, forKey: SettingsKeys.miniViewerUIElementSize) }
     }
 
     var defaultEditor: DefaultEditor {

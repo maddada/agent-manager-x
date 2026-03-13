@@ -40,6 +40,19 @@ enum UIElementSize: String, Codable, CaseIterable {
             return "Extra Large"
         }
     }
+
+    var clampedForMiniViewer: UIElementSize {
+        switch self {
+        case .small, .medium, .large:
+            return self
+        case .extraLarge:
+            return .large
+        }
+    }
+
+    static var miniViewerCases: [UIElementSize] {
+        [.small, .medium, .large]
+    }
 }
 
 enum MiniViewerSide: String, Codable, CaseIterable {

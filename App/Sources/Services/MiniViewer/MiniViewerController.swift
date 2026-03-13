@@ -64,7 +64,7 @@ final class MiniViewerController {
         self.fileManager = fileManager
 
         side = settings.miniViewerSide
-        uiElementSize = settings.miniViewerUIElementSize
+        uiElementSize = settings.miniViewerUIElementSize.clampedForMiniViewer
         useSlowerCompatibleProjectSwitching = settings.useSlowerCompatibleProjectSwitching
     }
 
@@ -78,8 +78,9 @@ final class MiniViewerController {
 
     func setUIElementSize(_ value: UIElementSize) {
         queue.async {
-            self.uiElementSize = value
-            self.settings.miniViewerUIElementSize = value
+            let clampedValue = value.clampedForMiniViewer
+            self.uiElementSize = clampedValue
+            self.settings.miniViewerUIElementSize = clampedValue
             self.requestPayloadRefreshLocked()
         }
     }
