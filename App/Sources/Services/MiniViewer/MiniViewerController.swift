@@ -30,12 +30,15 @@ final class MiniViewerController {
     private let coreActionsService: CoreActionsService
     private let settings: SettingsStore
     private let fileManager: FileManager
+    private var onOpenMainWindow: (() -> Void)?
 
     private let queue = DispatchQueue(label: "MiniViewerController.queue", qos: .userInteractive)
     private let payloadQueue = DispatchQueue(label: "MiniViewerController.payloadQueue", qos: .utility)
 
     private var side: MiniViewerSide
     private var uiElementSize: UIElementSize
+    private var showRecentSessionsOnly: Bool
+    private var recentActivityWindowMinutes: Int
     private var useSlowerCompatibleProjectSwitching: Bool
     private var isVisible = true
 
@@ -65,6 +68,8 @@ final class MiniViewerController {
 
         side = settings.miniViewerSide
         uiElementSize = settings.miniViewerUIElementSize.clampedForMiniViewer
+        showRecentSessionsOnly = settings.miniViewerShowRecentSessionsOnly
+        recentActivityWindowMinutes = settings.miniViewerRecentActivityWindowMinutes
         useSlowerCompatibleProjectSwitching = settings.useSlowerCompatibleProjectSwitching
     }
 
@@ -85,10 +90,27 @@ final class MiniViewerController {
         }
     }
 
+    func setRecentActivityFilter(enabled: Bool, minutes: Int) {
+        queue.async {
+            let clampedMinutes = max(1, minutes)
+            self.showRecentSessionsOnly = enabled
+            self.recentActivityWindowMinutes = clampedMinutes
+            self.settings.miniViewerShowRecentSessionsOnly = enabled
+            self.settings.miniViewerRecentActivityWindowMinutes = clampedMinutes
+            self.requestPayloadRefreshLocked()
+        }
+    }
+
     func setUseSlowerCompatibleProjectSwitching(_ enabled: Bool) {
         queue.async {
             self.useSlowerCompatibleProjectSwitching = enabled
             self.settings.useSlowerCompatibleProjectSwitching = enabled
+        }
+    }
+
+    func setOpenMainWindowHandler(_ handler: @escaping () -> Void) {
+        queue.async {
+            self.onOpenMainWindow = handler
         }
     }
 
@@ -338,11 +360,21 @@ final class MiniViewerController {
     private func collectProjectPayload() -> [MiniViewerProjectPayload] {
         let response = sessionDetectionService.getAllSessions()
 
-        let visibleSessions: [Session]
+        var visibleSessions: [Session]
         if response.backgroundSessions.isEmpty {
             visibleSessions = response.sessions.filter { !$0.isBackground }
         } else {
             visibleSessions = response.sessions
+        }
+
+        if showRecentSessionsOnly {
+            let cutoff = Date().addingTimeInterval(TimeInterval(-recentActivityWindowMinutes * 60))
+            visibleSessions = visibleSessions.filter { session in
+                guard let lastActivityDate = SessionParsingSupport.parseISODate(session.lastActivityAt) else {
+                    return false
+                }
+                return lastActivityDate >= cutoff
+            }
         }
 
         var projects: [MiniViewerProjectPayload] = []
@@ -447,6 +479,11 @@ final class MiniViewerController {
             try? coreActionsService.openInTerminal(path: action.projectPath, terminal: .terminal)
         case "endSession":
             try? coreActionsService.killSession(pid: Int(action.pid))
+        case "openMainWindow":
+            let openMainWindow = onOpenMainWindow
+            DispatchQueue.main.async {
+                openMainWindow?()
+            }
         default:
             break
         }

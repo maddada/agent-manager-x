@@ -6,6 +6,7 @@ struct SettingsSheetView: View {
     @State private var globalHotkeyDraft = ""
     @State private var miniViewerHotkeyDraft = ""
     @State private var overlayColorDraft = ""
+    @State private var miniViewerRecentActivityWindowDraft = ""
 
     private var settingsScale: CGFloat {
         store.mainAppUIElementSize.mainAppScale
@@ -328,6 +329,28 @@ struct SettingsSheetView: View {
                 set: { store.updateMiniViewerShowOnStart($0) }
             ))
             .font(.callout)
+
+            Toggle("Only show sessions active in the last X minutes", isOn: Binding(
+                get: { store.miniViewerShowRecentSessionsOnly },
+                set: { store.updateMiniViewerShowRecentSessionsOnly($0) }
+            ))
+            .font(.callout)
+
+            SettingsRow("Active Window") {
+                HStack(spacing: 8) {
+                    TextField("15", text: $miniViewerRecentActivityWindowDraft)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 64)
+                        .onChange(of: miniViewerRecentActivityWindowDraft, initial: false) { _, newValue in
+                            applyMiniViewerRecentActivityWindowDraft(newValue)
+                        }
+
+                    Text("minutes")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .disabled(!store.miniViewerShowRecentSessionsOnly)
         }
     }
 
@@ -452,6 +475,21 @@ struct SettingsSheetView: View {
         globalHotkeyDraft = store.globalHotkey
         miniViewerHotkeyDraft = store.miniViewerHotkey
         overlayColorDraft = store.overlayColor
+        miniViewerRecentActivityWindowDraft = String(store.miniViewerRecentActivityWindowMinutes)
+    }
+
+    private func applyMiniViewerRecentActivityWindowDraft(_ rawValue: String) {
+        let digitsOnly = rawValue.filter(\.isNumber)
+        if digitsOnly != rawValue {
+            miniViewerRecentActivityWindowDraft = digitsOnly
+            return
+        }
+
+        guard let value = Int(digitsOnly), value > 0 else {
+            return
+        }
+
+        store.updateMiniViewerRecentActivityWindowMinutes(value)
     }
 
     private func editorLabel(_ editor: DefaultEditor) -> String {

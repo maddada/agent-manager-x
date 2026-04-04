@@ -5,6 +5,8 @@ enum SettingsKeys {
     static let miniViewerHotkey = "agent-manager-x-mini-viewer-hotkey"
     static let miniViewerSide = "agent-manager-x-mini-viewer-side"
     static let miniViewerShowOnStart = "agent-manager-x-mini-viewer-show-on-start"
+    static let miniViewerShowRecentSessionsOnly = "agent-manager-x-mini-viewer-show-recent-sessions-only"
+    static let miniViewerRecentActivityWindowMinutes = "agent-manager-x-mini-viewer-recent-activity-window-minutes"
     static let mainAppUIElementSize = "agent-manager-x-main-app-ui-element-size"
     static let miniViewerUIElementSize = "agent-manager-x-mini-viewer-ui-element-size"
     static let defaultEditor = "agent-manager-x-default-editor"

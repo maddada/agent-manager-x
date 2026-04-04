@@ -270,6 +270,54 @@ private struct MiddleClickCatcher: NSViewRepresentable {
     }
 }
 
+private struct RightClickCatcher: NSViewRepresentable {
+    let onRightClick: () -> Void
+
+    final class RightClickPassthroughView: NSView {
+        var onRightClick: () -> Void
+
+        init(onRightClick: @escaping () -> Void) {
+            self.onRightClick = onRightClick
+            super.init(frame: .zero)
+        }
+
+        required init?(coder: NSCoder) {
+            return nil
+        }
+
+        override var isOpaque: Bool {
+            false
+        }
+
+        override func hitTest(_ point: NSPoint) -> NSView? {
+            guard let event = window?.currentEvent else {
+                return nil
+            }
+
+            guard event.type == .rightMouseDown || event.type == .rightMouseUp else {
+                return nil
+            }
+
+            return self
+        }
+
+        override func rightMouseDown(with event: NSEvent) {
+            onRightClick()
+        }
+    }
+
+    func makeNSView(context: Context) -> NSView {
+        RightClickPassthroughView(onRightClick: onRightClick)
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        guard let passthroughView = nsView as? RightClickPassthroughView else {
+            return
+        }
+        passthroughView.onRightClick = onRightClick
+    }
+}
+
 private struct MiniViewerFontScaleKey: EnvironmentKey {
     static let defaultValue: CGFloat = 1.0
 }
@@ -345,56 +393,11 @@ private struct SessionRowView: View {
     let isExpanded: Bool
     let showDetails: Bool
     let showProjectName: Bool
-    let showPopoverAbove: Bool
     let agentImage: NSImage?
     let onActivate: () -> Void
     let onMiddleClick: () -> Void
-    let onPopoverVisibilityChanged: (Bool) -> Void
+    let onRightClick: () -> Void
     @State private var isLoadingSpinActive = false
-    @State private var isRowHovered = false
-    @State private var isMessagePopoverHovered = false
-    @State private var isMessagePopoverPresented = false
-    @State private var showMessagePopoverTask: DispatchWorkItem?
-    @State private var hideMessagePopoverTask: DispatchWorkItem?
-
-    private var messagePopoverWidth: CGFloat {
-        320 * chromeScale
-    }
-
-    private var messagePopoverHeight: CGFloat {
-        240 * chromeScale
-    }
-
-    private var popoverYOffset: CGFloat {
-        if showPopoverAbove {
-            return -(messagePopoverHeight + (10 * chromeScale))
-        }
-        return 44 * chromeScale
-    }
-
-    @ViewBuilder
-    private var messagePopoverContent: some View {
-        if let fullMessage {
-            ScrollView(.vertical, showsIndicators: true) {
-                Text(fullMessage)
-                    .miniViewerFont(size: 13)
-                    .foregroundStyle(.primary)
-                    .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(14 * chromeScale)
-            }
-            .frame(maxHeight: messagePopoverHeight)
-            .frame(width: messagePopoverWidth)
-            .onHover { hovering in
-                isMessagePopoverHovered = hovering
-                if hovering {
-                    hideMessagePopoverTask?.cancel()
-                } else {
-                    scheduleMessagePopoverHide()
-                }
-            }
-        }
-    }
 
     private var rowHeight: CGFloat {
         56 * chromeScale
@@ -499,40 +502,6 @@ private struct SessionRowView: View {
             lowered.hasPrefix("<command-args>")
     }
 
-    private func showMessagePopover() {
-        hideMessagePopoverTask?.cancel()
-        guard showDetails, fullMessage != nil else {
-            return
-        }
-        isMessagePopoverPresented = true
-    }
-
-    private func scheduleMessagePopoverShow() {
-        showMessagePopoverTask?.cancel()
-        guard showDetails, fullMessage != nil else {
-            return
-        }
-
-        let task = DispatchWorkItem {
-            if isRowHovered {
-                showMessagePopover()
-            }
-        }
-        showMessagePopoverTask = task
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0, execute: task)
-    }
-
-    private func scheduleMessagePopoverHide() {
-        hideMessagePopoverTask?.cancel()
-        let task = DispatchWorkItem {
-            if !isRowHovered && !isMessagePopoverHovered {
-                isMessagePopoverPresented = false
-            }
-        }
-        hideMessagePopoverTask = task
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.16, execute: task)
-    }
-
     @ViewBuilder
     private var largeStatusIndicator: some View {
         if isNewSession {
@@ -627,10 +596,6 @@ private struct SessionRowView: View {
                             .lineLimit(1)
                         Spacer(minLength: 0)
                     }
-                    .contentShape(Rectangle())
-                    .popover(isPresented: $isMessagePopoverPresented, arrowEdge: .bottom) {
-                        messagePopoverContent
-                    }
 
                     HStack(spacing: 7 * chromeScale) {
                         Text(lastActivityText)
@@ -660,39 +625,11 @@ private struct SessionRowView: View {
                 .stroke(Color.white.opacity(0.2), lineWidth: 1)
         ) : AnyView(EmptyView()))
         .overlay(MiddleClickCatcher(onMiddleClick: onMiddleClick))
+        .overlay(RightClickCatcher(onRightClick: onRightClick))
         .buttonStyle(.plain)
         .focusable(false)
         .miniViewerPointerCursor()
-        .zIndex(isMessagePopoverPresented ? 200 : 0)
-        .onHover { hovering in
-            isRowHovered = hovering
-            if hovering {
-                scheduleMessagePopoverShow()
-            } else {
-                showMessagePopoverTask?.cancel()
-                scheduleMessagePopoverHide()
-            }
-        }
         .animation(.easeInOut(duration: 0.16), value: isExpanded)
-        .onChange(of: showDetails) { _, detailsVisible in
-            if !detailsVisible {
-                showMessagePopoverTask?.cancel()
-                hideMessagePopoverTask?.cancel()
-                isMessagePopoverPresented = false
-                isRowHovered = false
-                isMessagePopoverHovered = false
-            }
-        }
-        .onChange(of: isMessagePopoverPresented) { _, presented in
-            onPopoverVisibilityChanged(presented)
-        }
-        .onDisappear {
-            showMessagePopoverTask?.cancel()
-            hideMessagePopoverTask?.cancel()
-            isMessagePopoverPresented = false
-            isRowHovered = false
-            isMessagePopoverHovered = false
-        }
     }
 }
 
@@ -781,22 +718,16 @@ private struct MiniViewerRootView: View {
     let iconProvider: AgentIconProvider
     let onActivate: (MiniViewerSession) -> Void
     let onMiddleClick: (MiniViewerSession) -> Void
-    @State private var activePopoverSessionID: String?
+    let onRightClick: (MiniViewerSession) -> Void
 
     private var chromeScale: CGFloat {
         model.uiElementSize.chromeScale
-    }
-
-    private var popoverAboveSessionIDs: Set<String> {
-        Set(model.projects.flatMap(\.sessions).suffix(2).map(\.id))
     }
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(spacing: 8 * chromeScale) {
                 ForEach(model.projects) { project in
-                    let projectHasActivePopover = activePopoverSessionID != nil
-                        && project.sessions.contains(where: { $0.id == activePopoverSessionID })
                     VStack(alignment: .leading, spacing: 6 * chromeScale) {
                         ProjectHeaderView(project: project)
                             .opacity(model.showDetails ? 1 : 0)
@@ -808,22 +739,14 @@ private struct MiniViewerRootView: View {
                                 isExpanded: model.isExpanded,
                                 showDetails: model.showDetails,
                                 showProjectName: false,
-                                showPopoverAbove: popoverAboveSessionIDs.contains(session.id),
                                 agentImage: iconProvider.image(for: session.agentType),
                                 onActivate: { onActivate(session) },
                                 onMiddleClick: { onMiddleClick(session) },
-                                onPopoverVisibilityChanged: { presented in
-                                    if presented {
-                                        activePopoverSessionID = session.id
-                                    } else if activePopoverSessionID == session.id {
-                                        activePopoverSessionID = nil
-                                    }
-                                }
+                                onRightClick: { onRightClick(session) }
                             )
                         }
                     }
                     .padding(.bottom, 2 * chromeScale)
-                    .zIndex(projectHasActivePopover ? 1000 : 0)
                 }
             }
             .padding(8 * chromeScale)
@@ -850,6 +773,10 @@ final class MiniViewerAppDelegate: NSObject, NSApplicationDelegate {
     private var projectBottomPadding: CGFloat { 2 * chromeScale }
     private var rootPaddingTopBottom: CGFloat { 16 * chromeScale }
     private var rootProjectSpacing: CGFloat { 8 * chromeScale }
+    private var rootPadding: CGFloat { 8 * chromeScale }
+    private var rowHorizontalPadding: CGFloat { 8 * chromeScale }
+    private var iconClusterSize: CGFloat { 34 * chromeScale }
+    private var iconHoverSize: CGFloat { 20 * chromeScale }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         applyInitialConfigurationFromEnvironment()
@@ -894,6 +821,9 @@ final class MiniViewerAppDelegate: NSObject, NSApplicationDelegate {
                 },
                 onMiddleClick: { [weak self] session in
                     self?.endSession(session)
+                },
+                onRightClick: { [weak self] session in
+                    self?.openMainWindow(for: session)
                 }
             )
         )
@@ -1028,40 +958,52 @@ final class MiniViewerAppDelegate: NSObject, NSApplicationDelegate {
 
     private func updateHoverStateFromPointer() {
         guard let panel = window else { return }
-        guard let screenFrame = NSScreen.main?.visibleFrame else { return }
 
         let pointer = NSEvent.mouseLocation
-        let frame = panel.frame
-        let hoverInsetTop: CGFloat = -3
-        let hoverInsetBottom: CGFloat = -30
-        let hoverInsetHorizontal: CGFloat = -3
-        let edgeTriggerWidth: CGFloat = 3
-        let withinVerticalRange = pointer.y >= frame.minY - hoverInsetBottom && pointer.y <= frame.maxY + hoverInsetTop
-        if !withinVerticalRange {
-            model.setHovering(false)
-            return
+        let hoveringIcon = collapsedIconRects(panelFrame: panel.frame)
+            .contains(where: { $0.contains(pointer) })
+        model.setHovering(hoveringIcon)
+    }
+
+    private func collapsedIconRects(panelFrame: NSRect) -> [NSRect] {
+        guard model.hasVisibleSessions else {
+            return []
         }
 
-        let stickyBounds = NSRect(
-            x: frame.minX - hoverInsetHorizontal,
-            y: frame.minY - hoverInsetBottom,
-            width: frame.width + (hoverInsetHorizontal * 2),
-            height: frame.height + hoverInsetTop + hoverInsetBottom
-        )
-        let edgeTriggered: Bool = {
-            switch model.side {
-            case .left:
-                return pointer.x <= screenFrame.minX + edgeTriggerWidth
-            case .right:
-                return pointer.x >= screenFrame.maxX - edgeTriggerWidth
+        let iconX = panelFrame.minX
+            + rowHorizontalPadding
+            + ((iconClusterSize - iconHoverSize) / 2.0)
+
+        var rects: [NSRect] = []
+        var currentTop = panelFrame.maxY - rootPadding
+
+        for (projectIndex, project) in model.projects.enumerated() {
+            currentTop -= projectHeaderHeight
+
+            for _ in project.sessions {
+                currentTop -= projectStackSpacing
+
+                let rowBottom = currentTop - rowHeight
+                let iconY = rowBottom + ((rowHeight - iconHoverSize) / 2.0)
+                rects.append(
+                    NSRect(
+                        x: iconX,
+                        y: iconY,
+                        width: iconHoverSize,
+                        height: iconHoverSize
+                    )
+                )
+
+                currentTop = rowBottom
             }
-        }()
 
-        if model.isExpanded {
-            model.setHovering(stickyBounds.contains(pointer) || edgeTriggered)
-        } else {
-            model.setHovering(edgeTriggered)
+            currentTop -= projectBottomPadding
+            if projectIndex < model.projects.count - 1 {
+                currentTop -= rootProjectSpacing
+            }
         }
+
+        return rects
     }
 
     private func activateSession(_ session: MiniViewerSession) {
@@ -1070,6 +1012,10 @@ final class MiniViewerAppDelegate: NSObject, NSApplicationDelegate {
 
     private func endSession(_ session: MiniViewerSession) {
         sendAction("endSession", session: session)
+    }
+
+    private func openMainWindow(for session: MiniViewerSession) {
+        sendAction("openMainWindow", session: session)
     }
 
     private func sendAction(_ actionName: String, session: MiniViewerSession) {

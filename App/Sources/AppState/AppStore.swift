@@ -38,6 +38,8 @@ final class AppStore: ObservableObject {
     @Published var miniViewerHotkey: String
     @Published var miniViewerSide: MiniViewerSide
     @Published var miniViewerShowOnStart: Bool
+    @Published var miniViewerShowRecentSessionsOnly: Bool
+    @Published var miniViewerRecentActivityWindowMinutes: Int
     @Published var mainAppUIElementSize: UIElementSize
     @Published var miniViewerUIElementSize: UIElementSize
     @Published var notificationSound: NotificationSound
@@ -111,10 +113,15 @@ final class AppStore: ObservableObject {
         miniViewerHotkey = settings.miniViewerHotkey
         miniViewerSide = settings.miniViewerSide
         miniViewerShowOnStart = settings.miniViewerShowOnStart
+        miniViewerShowRecentSessionsOnly = settings.miniViewerShowRecentSessionsOnly
+        miniViewerRecentActivityWindowMinutes = settings.miniViewerRecentActivityWindowMinutes
         mainAppUIElementSize = settings.mainAppUIElementSize
         miniViewerUIElementSize = settings.miniViewerUIElementSize
         notificationSound = settings.notificationSound
         showSessionFilePath = settings.showSessionFilePath
+        self.miniViewerController.setOpenMainWindowHandler { [weak self] in
+            self?.showAndFocusMainWindow()
+        }
     }
 
     func start() {
@@ -555,6 +562,25 @@ final class AppStore: ObservableObject {
         settings.miniViewerShowOnStart = enabled
     }
 
+    func updateMiniViewerShowRecentSessionsOnly(_ enabled: Bool) {
+        miniViewerShowRecentSessionsOnly = enabled
+        settings.miniViewerShowRecentSessionsOnly = enabled
+        miniViewerController.setRecentActivityFilter(
+            enabled: enabled,
+            minutes: miniViewerRecentActivityWindowMinutes
+        )
+    }
+
+    func updateMiniViewerRecentActivityWindowMinutes(_ value: Int) {
+        let clampedValue = max(1, value)
+        miniViewerRecentActivityWindowMinutes = clampedValue
+        settings.miniViewerRecentActivityWindowMinutes = clampedValue
+        miniViewerController.setRecentActivityFilter(
+            enabled: miniViewerShowRecentSessionsOnly,
+            minutes: clampedValue
+        )
+    }
+
     func updateShowSessionFilePath(_ enabled: Bool) {
         showSessionFilePath = enabled
         settings.showSessionFilePath = enabled
@@ -712,6 +738,10 @@ final class AppStore: ObservableObject {
     private func applyMiniViewerSettings() {
         miniViewerController.setSide(miniViewerSide)
         miniViewerController.setUIElementSize(miniViewerUIElementSize)
+        miniViewerController.setRecentActivityFilter(
+            enabled: miniViewerShowRecentSessionsOnly,
+            minutes: miniViewerRecentActivityWindowMinutes
+        )
         miniViewerController.setUseSlowerCompatibleProjectSwitching(useSlowerCompatibleProjectSwitching)
     }
 

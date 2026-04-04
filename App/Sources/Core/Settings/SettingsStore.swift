@@ -8,6 +8,8 @@ final class SettingsStore {
     static let defaultMiniViewerHotkey = "Command+Control+Shift+M"
     static let defaultMiniViewerSide: MiniViewerSide = .left
     static let defaultMiniViewerShowOnStart = true
+    static let defaultMiniViewerShowRecentSessionsOnly = true
+    static let defaultMiniViewerRecentActivityWindowMinutes = 15
     static let defaultMainAppUIElementSize: UIElementSize = .medium
     static let defaultMiniViewerUIElementSize: UIElementSize = .small
     static let defaultEditorValue: DefaultEditor = .code
@@ -50,6 +52,28 @@ final class SettingsStore {
             return defaults.bool(forKey: SettingsKeys.miniViewerShowOnStart)
         }
         set { defaults.set(newValue, forKey: SettingsKeys.miniViewerShowOnStart) }
+    }
+
+    var miniViewerShowRecentSessionsOnly: Bool {
+        get {
+            guard defaults.object(forKey: SettingsKeys.miniViewerShowRecentSessionsOnly) != nil else {
+                return Self.defaultMiniViewerShowRecentSessionsOnly
+            }
+            return defaults.bool(forKey: SettingsKeys.miniViewerShowRecentSessionsOnly)
+        }
+        set { defaults.set(newValue, forKey: SettingsKeys.miniViewerShowRecentSessionsOnly) }
+    }
+
+    var miniViewerRecentActivityWindowMinutes: Int {
+        get {
+            guard defaults.object(forKey: SettingsKeys.miniViewerRecentActivityWindowMinutes) != nil else {
+                return Self.defaultMiniViewerRecentActivityWindowMinutes
+            }
+            return max(1, defaults.integer(forKey: SettingsKeys.miniViewerRecentActivityWindowMinutes))
+        }
+        set {
+            defaults.set(max(1, newValue), forKey: SettingsKeys.miniViewerRecentActivityWindowMinutes)
+        }
     }
 
     var mainAppUIElementSize: UIElementSize {
