@@ -124,11 +124,13 @@ private struct AppHeaderView: View {
                     )
                 ) {
                     ForEach(SessionDetailsRetrievalMode.allCases, id: \.rawValue) { mode in
-                        Text(mode.rawValue).tag(mode)
+                        Text(mode.displayName).tag(mode)
                     }
                 }
+                .labelsHidden()
                 .pickerStyle(.segmented)
                 .frame(width: 260)
+                .hoverPopover(store.sessionDetailsRetrievalMode.hoverDescription)
 
                 if showsProcessActions && !store.backgroundSessions.isEmpty {
                     Button {
