@@ -7,9 +7,12 @@ final class SettingsStore {
     static let defaultGlobalHotkey = "Command+Control+Shift+Space"
     static let defaultMiniViewerHotkey = "Command+Control+Shift+M"
     static let defaultMiniViewerSide: MiniViewerSide = .left
+    static let defaultMiniViewerShowOnActiveMonitor = false
+    static let defaultMiniViewerPinnedScreenTarget: MiniViewerScreenTarget = .primary
     static let defaultMiniViewerShowOnStart = true
     static let defaultMiniViewerShowRecentSessionsOnly = true
     static let defaultMiniViewerRecentActivityWindowMinutes = 15
+    static let defaultMiniViewerMaxSessions = 10
     static let defaultMainAppUIElementSize: UIElementSize = .medium
     static let defaultMiniViewerUIElementSize: UIElementSize = .small
     static let defaultEditorValue: DefaultEditor = .code
@@ -45,6 +48,30 @@ final class SettingsStore {
         set { defaults.set(newValue.rawValue, forKey: SettingsKeys.miniViewerSide) }
     }
 
+    var miniViewerShowOnActiveMonitor: Bool {
+        get {
+            guard defaults.object(forKey: SettingsKeys.miniViewerShowOnActiveMonitor) != nil else {
+                return Self.defaultMiniViewerShowOnActiveMonitor
+            }
+            return defaults.bool(forKey: SettingsKeys.miniViewerShowOnActiveMonitor)
+        }
+        set { defaults.set(newValue, forKey: SettingsKeys.miniViewerShowOnActiveMonitor) }
+    }
+
+    var miniViewerPinnedScreenTarget: MiniViewerScreenTarget {
+        get {
+            MiniViewerScreenTarget(
+                storageValue: defaults.string(forKey: SettingsKeys.miniViewerPinnedScreenTarget)
+            )
+        }
+        set { defaults.set(newValue.storageValue, forKey: SettingsKeys.miniViewerPinnedScreenTarget) }
+    }
+
+    var miniViewerPinnedScreenNameSnapshot: String {
+        get { defaults.string(forKey: SettingsKeys.miniViewerPinnedScreenNameSnapshot) ?? "" }
+        set { defaults.set(newValue, forKey: SettingsKeys.miniViewerPinnedScreenNameSnapshot) }
+    }
+
     var miniViewerShowOnStart: Bool {
         get {
             guard defaults.object(forKey: SettingsKeys.miniViewerShowOnStart) != nil else {
@@ -74,6 +101,18 @@ final class SettingsStore {
         }
         set {
             defaults.set(max(1, newValue), forKey: SettingsKeys.miniViewerRecentActivityWindowMinutes)
+        }
+    }
+
+    var miniViewerMaxSessions: Int {
+        get {
+            guard defaults.object(forKey: SettingsKeys.miniViewerMaxSessions) != nil else {
+                return Self.defaultMiniViewerMaxSessions
+            }
+            return max(1, defaults.integer(forKey: SettingsKeys.miniViewerMaxSessions))
+        }
+        set {
+            defaults.set(max(1, newValue), forKey: SettingsKeys.miniViewerMaxSessions)
         }
     }
 

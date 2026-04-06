@@ -1,10 +1,39 @@
 import SwiftUI
 import AppKit
 import Combine
+import CoreGraphics
 
 private enum ViewerSide: String, Codable {
     case left
     case right
+}
+
+private enum ViewerScreenTarget: Equatable {
+    case primary
+    case builtIn
+    case display(String)
+
+    init(storageValue: String) {
+        if storageValue == "primary" {
+            self = .primary
+            return
+        }
+
+        if storageValue == "builtin" {
+            self = .builtIn
+            return
+        }
+
+        if storageValue.hasPrefix("display:") {
+            let identifier = String(storageValue.dropFirst("display:".count))
+            if !identifier.isEmpty {
+                self = .display(identifier)
+                return
+            }
+        }
+
+        self = .primary
+    }
 }
 
 private enum UIElementSize: String, Codable {
@@ -100,6 +129,8 @@ private struct MiniViewerProject: Codable, Identifiable {
 
 private struct MiniViewerPayload: Codable {
     let side: ViewerSide
+    let showOnActiveMonitor: Bool
+    let pinnedScreenTarget: String
     let uiElementSize: UIElementSize
     let isVisible: Bool
     let projects: [MiniViewerProject]
@@ -174,6 +205,8 @@ private final class AgentIconProvider {
 
 private final class ViewerModel: ObservableObject {
     @Published var side: ViewerSide = .right
+    @Published var showOnActiveMonitor = false
+    @Published var pinnedScreenTarget = "primary"
     @Published var uiElementSize: UIElementSize = .small
     @Published var isVisible = true
     @Published var projects: [MiniViewerProject] = []
@@ -192,6 +225,8 @@ private final class ViewerModel: ObservableObject {
 
     func apply(payload: MiniViewerPayload) {
         side = payload.side
+        showOnActiveMonitor = payload.showOnActiveMonitor
+        pinnedScreenTarget = payload.pinnedScreenTarget
         uiElementSize = payload.uiElementSize
         isVisible = payload.isVisible
         projects = payload.projects
@@ -806,6 +841,7 @@ final class MiniViewerAppDelegate: NSObject, NSApplicationDelegate {
     private var cancellables = Set<AnyCancellable>()
     private var hoverTimer: Timer?
     private var iconFrames: [String: CGRect] = [:]
+    private var screenParametersObserver: NSObjectProtocol?
 
     private var chromeScale: CGFloat { model.uiElementSize.chromeScale }
     private var collapsedWidth: CGFloat { 64 * chromeScale }
@@ -822,6 +858,7 @@ final class MiniViewerAppDelegate: NSObject, NSApplicationDelegate {
         applyInitialConfigurationFromEnvironment()
         createWindow()
         bindModel()
+        startScreenParametersObserver()
         startInputReader()
         startHoverMonitor()
         NSApp.setActivationPolicy(.accessory)
@@ -878,12 +915,28 @@ final class MiniViewerAppDelegate: NSObject, NSApplicationDelegate {
 
     private func bindModel() {
         Publishers.CombineLatest4(model.$side, model.$isExpanded, model.$projects, model.$uiElementSize)
-            .combineLatest(model.$isVisible)
+            .combineLatest(
+                Publishers.CombineLatest3(
+                    model.$isVisible,
+                    model.$showOnActiveMonitor,
+                    model.$pinnedScreenTarget
+                )
+            )
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _, _ in
                 self?.updateWindowFrame(animated: true)
             }
             .store(in: &cancellables)
+    }
+
+    private func startScreenParametersObserver() {
+        screenParametersObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.didChangeScreenParametersNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.updateWindowFrame(animated: false)
+        }
     }
 
     private func desiredHeight(for projects: [MiniViewerProject]) -> CGFloat {
@@ -908,7 +961,8 @@ final class MiniViewerAppDelegate: NSObject, NSApplicationDelegate {
 
     private func updateWindowFrame(animated: Bool) {
         guard let panel = window else { return }
-        guard let screenFrame = NSScreen.main?.visibleFrame else { return }
+        guard let screen = resolvedScreen() else { return }
+        let screenFrame = screen.visibleFrame
 
         guard model.isVisible && model.hasVisibleSessions else {
             panel.ignoresMouseEvents = true
@@ -943,6 +997,53 @@ final class MiniViewerAppDelegate: NSObject, NSApplicationDelegate {
         if !panel.isVisible {
             panel.orderFrontRegardless()
         }
+    }
+
+    private func resolvedScreen() -> NSScreen? {
+        if model.showOnActiveMonitor {
+            return NSScreen.main ?? primaryScreen()
+        }
+
+        switch ViewerScreenTarget(storageValue: model.pinnedScreenTarget) {
+        case .primary:
+            return primaryScreen()
+        case .builtIn:
+            return builtInScreen() ?? primaryScreen()
+        case let .display(identifier):
+            return screen(matchingStableIdentifier: identifier) ?? primaryScreen()
+        }
+    }
+
+    private func primaryScreen() -> NSScreen? {
+        let mainDisplayID = CGMainDisplayID()
+        return NSScreen.screens.first(where: { $0.agentManagerXDisplayID == mainDisplayID }) ?? NSScreen.screens.first
+    }
+
+    private func builtInScreen() -> NSScreen? {
+        NSScreen.screens.first { screen in
+            guard let displayID = screen.agentManagerXDisplayID else {
+                return false
+            }
+            return CGDisplayIsBuiltin(displayID) != 0
+        }
+    }
+
+    private func screen(matchingStableIdentifier identifier: String) -> NSScreen? {
+        NSScreen.screens.first { screen in
+            guard let displayID = screen.agentManagerXDisplayID else {
+                return false
+            }
+            return stableIdentifier(for: displayID) == identifier
+        }
+    }
+
+    private func stableIdentifier(for displayID: CGDirectDisplayID) -> String {
+        if let unmanaged = CGDisplayCreateUUIDFromDisplayID(displayID) {
+            let uuid = unmanaged.takeRetainedValue()
+            return (CFUUIDCreateString(nil, uuid) as String).uppercased()
+        }
+
+        return "display-\(displayID)"
     }
 
     private func startInputReader() {
@@ -1002,13 +1103,28 @@ final class MiniViewerAppDelegate: NSObject, NSApplicationDelegate {
     private func updateHoverStateFromPointer() {
         guard let panel = window else { return }
         guard let contentView = panel.contentView else { return }
+        guard let screenFrame = panel.screen?.visibleFrame ?? NSScreen.main?.visibleFrame else { return }
 
         let pointer = NSEvent.mouseLocation
-        let hoveringIcon = iconFrames.values.contains { iconFrame in
+        let liveIconRects = iconFrames.values.map { iconFrame in
             let windowRect = contentView.convert(iconFrame, to: nil)
-            let screenRect = panel.convertToScreen(windowRect)
-            return screenRect.contains(pointer)
+            return panel.convertToScreen(windowRect)
         }
+
+        let rightCollapsedAnchorRects: [NSRect]
+        if model.side == .right && model.isExpanded {
+            let collapsedPanelMinX = screenFrame.maxX - collapsedWidth
+            let expandedPanelMinX = panel.frame.minX
+            let anchorShiftX = collapsedPanelMinX - expandedPanelMinX
+            rightCollapsedAnchorRects = liveIconRects.map { rect in
+                rect.offsetBy(dx: anchorShiftX, dy: 0)
+            }
+        } else {
+            rightCollapsedAnchorRects = []
+        }
+
+        let hoveringIcon = liveIconRects.contains(where: { $0.contains(pointer) }) ||
+            rightCollapsedAnchorRects.contains(where: { $0.contains(pointer) })
         model.setHovering(hoveringIcon)
     }
 
@@ -1049,10 +1165,26 @@ final class MiniViewerAppDelegate: NSObject, NSApplicationDelegate {
            let initialSide = ViewerSide(rawValue: rawSide) {
             model.side = initialSide
         }
+        if let rawShowOnActiveMonitor = environment["MINI_VIEWER_SHOW_ON_ACTIVE_MONITOR"] {
+            model.showOnActiveMonitor = rawShowOnActiveMonitor == "1"
+        }
+        if let rawPinnedScreenTarget = environment["MINI_VIEWER_PINNED_SCREEN_TARGET"],
+           !rawPinnedScreenTarget.isEmpty {
+            model.pinnedScreenTarget = rawPinnedScreenTarget
+        }
         if let rawSize = environment["MINI_VIEWER_UI_ELEMENT_SIZE"],
            let initialSize = UIElementSize(rawValue: rawSize) {
             model.uiElementSize = initialSize
         }
+    }
+}
+
+private extension NSScreen {
+    var agentManagerXDisplayID: CGDirectDisplayID? {
+        guard let screenNumber = deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber else {
+            return nil
+        }
+        return CGDirectDisplayID(screenNumber.uint32Value)
     }
 }
 

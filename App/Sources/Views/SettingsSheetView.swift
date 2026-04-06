@@ -7,6 +7,7 @@ struct SettingsSheetView: View {
     @State private var miniViewerHotkeyDraft = ""
     @State private var overlayColorDraft = ""
     @State private var miniViewerRecentActivityWindowDraft = ""
+    @State private var miniViewerMaxSessionsDraft = ""
 
     private var settingsScale: CGFloat {
         store.mainAppUIElementSize.mainAppScale
@@ -330,6 +331,35 @@ struct SettingsSheetView: View {
             ))
             .font(.callout)
 
+            Toggle("Show on active monitor", isOn: Binding(
+                get: { store.miniViewerShowOnActiveMonitor },
+                set: { store.updateMiniViewerShowOnActiveMonitor($0) }
+            ))
+            .font(.callout)
+
+            if !store.miniViewerShowOnActiveMonitor {
+                SettingsRow("Monitor") {
+                    HStack(spacing: 8) {
+                        Picker("", selection: Binding(
+                            get: { store.miniViewerPinnedScreenTarget },
+                            set: { store.updateMiniViewerPinnedScreenTarget($0) }
+                        )) {
+                            ForEach(store.miniViewerScreenOptions) { option in
+                                Text(option.label).tag(option.target)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .frame(width: 220)
+
+                        if let warning = store.miniViewerPinnedScreenWarning {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundStyle(.yellow)
+                                .hoverPopover(warning)
+                        }
+                    }
+                }
+            }
+
             Toggle("Only show sessions active in the last X minutes", isOn: Binding(
                 get: { store.miniViewerShowRecentSessionsOnly },
                 set: { store.updateMiniViewerShowRecentSessionsOnly($0) }
@@ -351,6 +381,21 @@ struct SettingsSheetView: View {
                 }
             }
             .disabled(!store.miniViewerShowRecentSessionsOnly)
+
+            SettingsRow("Max Sessions") {
+                HStack(spacing: 8) {
+                    TextField("10", text: $miniViewerMaxSessionsDraft)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 64)
+                        .onChange(of: miniViewerMaxSessionsDraft, initial: false) { _, newValue in
+                            applyMiniViewerMaxSessionsDraft(newValue)
+                        }
+
+                    Text("latest sessions")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
+            }
         }
     }
 
@@ -476,6 +521,7 @@ struct SettingsSheetView: View {
         miniViewerHotkeyDraft = store.miniViewerHotkey
         overlayColorDraft = store.overlayColor
         miniViewerRecentActivityWindowDraft = String(store.miniViewerRecentActivityWindowMinutes)
+        miniViewerMaxSessionsDraft = String(store.miniViewerMaxSessions)
     }
 
     private func applyMiniViewerRecentActivityWindowDraft(_ rawValue: String) {
@@ -490,6 +536,20 @@ struct SettingsSheetView: View {
         }
 
         store.updateMiniViewerRecentActivityWindowMinutes(value)
+    }
+
+    private func applyMiniViewerMaxSessionsDraft(_ rawValue: String) {
+        let digitsOnly = rawValue.filter(\.isNumber)
+        if digitsOnly != rawValue {
+            miniViewerMaxSessionsDraft = digitsOnly
+            return
+        }
+
+        guard let value = Int(digitsOnly), value > 0 else {
+            return
+        }
+
+        store.updateMiniViewerMaxSessions(value)
     }
 
     private func editorLabel(_ editor: DefaultEditor) -> String {

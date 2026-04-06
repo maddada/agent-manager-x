@@ -1,4 +1,5 @@
 import AppKit
+import CoreGraphics
 import Foundation
 import SwiftUI
 
@@ -38,9 +39,12 @@ final class AppStore: ObservableObject {
     @Published var globalHotkey: String
     @Published var miniViewerHotkey: String
     @Published var miniViewerSide: MiniViewerSide
+    @Published var miniViewerShowOnActiveMonitor: Bool
+    @Published var miniViewerPinnedScreenTarget: MiniViewerScreenTarget
     @Published var miniViewerShowOnStart: Bool
     @Published var miniViewerShowRecentSessionsOnly: Bool
     @Published var miniViewerRecentActivityWindowMinutes: Int
+    @Published var miniViewerMaxSessions: Int
     @Published var mainAppUIElementSize: UIElementSize
     @Published var miniViewerUIElementSize: UIElementSize
     @Published var notificationSound: NotificationSound
@@ -48,6 +52,8 @@ final class AppStore: ObservableObject {
 
     @Published private(set) var notificationState = NotificationState()
     @Published private(set) var gitDiffStatsByProjectPath: [String: GitDiffStats] = [:]
+    @Published private(set) var miniViewerScreenOptions: [MiniViewerScreenOption] = []
+    @Published private(set) var miniViewerPinnedScreenWarning: String?
 
     private let settings: SettingsStore
     private let sessionDetectionService: SessionDetectionService
@@ -66,6 +72,7 @@ final class AppStore: ObservableObject {
     private weak var mainWindow: NSWindow?
     private var configuredMainWindowID: ObjectIdentifier?
     private var confirmationResetTask: DispatchWorkItem?
+    private var screenParametersObserver: NSObjectProtocol?
     private let refreshQueue = DispatchQueue(label: "AppStore.refresh", qos: .userInitiated)
     private let gitDiffStatsQueue = DispatchQueue(label: "AppStore.gitDiffStats", qos: .utility)
     private var isRefreshInFlight = false
@@ -117,9 +124,12 @@ final class AppStore: ObservableObject {
         globalHotkey = settings.globalHotkey
         miniViewerHotkey = settings.miniViewerHotkey
         miniViewerSide = settings.miniViewerSide
+        miniViewerShowOnActiveMonitor = settings.miniViewerShowOnActiveMonitor
+        miniViewerPinnedScreenTarget = settings.miniViewerPinnedScreenTarget
         miniViewerShowOnStart = settings.miniViewerShowOnStart
         miniViewerShowRecentSessionsOnly = settings.miniViewerShowRecentSessionsOnly
         miniViewerRecentActivityWindowMinutes = settings.miniViewerRecentActivityWindowMinutes
+        miniViewerMaxSessions = settings.miniViewerMaxSessions
         mainAppUIElementSize = settings.mainAppUIElementSize
         miniViewerUIElementSize = settings.miniViewerUIElementSize
         notificationSound = settings.notificationSound
@@ -142,6 +152,8 @@ final class AppStore: ObservableObject {
                 self?.applyVSmuxWorkspaces(snapshots)
             }
         }
+
+        refreshMiniViewerScreenState()
     }
 
     func start() {
@@ -150,6 +162,7 @@ final class AppStore: ObservableObject {
         }
 
         started = true
+        startObservingScreenParameters()
         configureMenuBarCallbacks()
         configureHotkeys()
         applyMiniViewerSettings()
@@ -168,6 +181,7 @@ final class AppStore: ObservableObject {
         hotkeyManager.unregisterAppToggleHotkey()
         hotkeyManager.unregisterMiniViewerHotkey()
         hotkeyManager.setCallbacks(onAppToggle: nil, onMiniViewerToggle: nil)
+        stopObservingScreenParameters()
         menuBarService.teardown()
         miniViewerController.shutdown()
         vsmuxSessionBroker.stop()
@@ -629,6 +643,29 @@ final class AppStore: ObservableObject {
         miniViewerController.setSide(value)
     }
 
+    func updateMiniViewerShowOnActiveMonitor(_ enabled: Bool) {
+        miniViewerShowOnActiveMonitor = enabled
+        settings.miniViewerShowOnActiveMonitor = enabled
+        miniViewerController.setScreenSelection(
+            showOnActiveMonitor: enabled,
+            pinnedScreenTarget: miniViewerPinnedScreenTarget
+        )
+        refreshMiniViewerScreenState()
+        revealMiniViewerAfterScreenSelectionChangeIfNeeded()
+    }
+
+    func updateMiniViewerPinnedScreenTarget(_ value: MiniViewerScreenTarget) {
+        miniViewerPinnedScreenTarget = value
+        settings.miniViewerPinnedScreenTarget = value
+        settings.miniViewerPinnedScreenNameSnapshot = snapshotLabel(for: value)
+        miniViewerController.setScreenSelection(
+            showOnActiveMonitor: miniViewerShowOnActiveMonitor,
+            pinnedScreenTarget: value
+        )
+        refreshMiniViewerScreenState()
+        revealMiniViewerAfterScreenSelectionChangeIfNeeded()
+    }
+
     func updateMiniViewerShowOnStart(_ enabled: Bool) {
         miniViewerShowOnStart = enabled
         settings.miniViewerShowOnStart = enabled
@@ -651,6 +688,13 @@ final class AppStore: ObservableObject {
             enabled: miniViewerShowRecentSessionsOnly,
             minutes: clampedValue
         )
+    }
+
+    func updateMiniViewerMaxSessions(_ value: Int) {
+        let clampedValue = max(1, value)
+        miniViewerMaxSessions = clampedValue
+        settings.miniViewerMaxSessions = clampedValue
+        miniViewerController.setMaxSessions(clampedValue)
     }
 
     func updateShowSessionFilePath(_ enabled: Bool) {
@@ -802,11 +846,16 @@ final class AppStore: ObservableObject {
 
     private func applyMiniViewerSettings() {
         miniViewerController.setSide(miniViewerSide)
+        miniViewerController.setScreenSelection(
+            showOnActiveMonitor: miniViewerShowOnActiveMonitor,
+            pinnedScreenTarget: miniViewerPinnedScreenTarget
+        )
         miniViewerController.setUIElementSize(miniViewerUIElementSize)
         miniViewerController.setRecentActivityFilter(
             enabled: miniViewerShowRecentSessionsOnly,
             minutes: miniViewerRecentActivityWindowMinutes
         )
+        miniViewerController.setMaxSessions(miniViewerMaxSessions)
         miniViewerController.setUseSlowerCompatibleProjectSwitching(useSlowerCompatibleProjectSwitching)
     }
 
@@ -1266,6 +1315,76 @@ final class AppStore: ObservableObject {
         return merged
     }
 
+    private func startObservingScreenParameters() {
+        guard screenParametersObserver == nil else {
+            refreshMiniViewerScreenState()
+            return
+        }
+
+        screenParametersObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.didChangeScreenParametersNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.refreshMiniViewerScreenState()
+            }
+        }
+
+        refreshMiniViewerScreenState()
+    }
+
+    private func stopObservingScreenParameters() {
+        if let screenParametersObserver {
+            NotificationCenter.default.removeObserver(screenParametersObserver)
+        }
+        screenParametersObserver = nil
+    }
+
+    private func refreshMiniViewerScreenState() {
+        let catalog = MiniViewerScreenCatalog(
+            pinnedTarget: miniViewerPinnedScreenTarget,
+            pinnedLabelSnapshot: settings.miniViewerPinnedScreenNameSnapshot
+        )
+        miniViewerScreenOptions = catalog.options
+        miniViewerPinnedScreenWarning = miniViewerShowOnActiveMonitor ? nil : catalog.warningMessage
+    }
+
+    private func snapshotLabel(for target: MiniViewerScreenTarget) -> String {
+        switch target {
+        case .primary:
+            return ""
+        case .builtIn:
+            return "Built-in screen"
+        case .display:
+            return miniViewerScreenOptions.first(where: { $0.target == target })?.label ?? settings.miniViewerPinnedScreenNameSnapshot
+        }
+    }
+
+    private func revealMiniViewerAfterScreenSelectionChangeIfNeeded() {
+        guard miniViewerHasVisibleSessions() else {
+            return
+        }
+
+        showMiniViewer()
+    }
+
+    private func miniViewerHasVisibleSessions() -> Bool {
+        var visibleSessions = sessions
+
+        if miniViewerShowRecentSessionsOnly {
+            let cutoff = Date().addingTimeInterval(TimeInterval(-miniViewerRecentActivityWindowMinutes * 60))
+            visibleSessions = visibleSessions.filter { session in
+                guard let lastActivityDate = SessionParsingSupport.parseISODate(session.lastActivityAt) else {
+                    return false
+                }
+                return lastActivityDate >= cutoff
+            }
+        }
+
+        return !visibleSessions.prefix(miniViewerMaxSessions).isEmpty
+    }
+
     private func normalizedHexColor(_ rawValue: String) -> String? {
         let trimmed = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.count == 7,
@@ -1279,6 +1398,130 @@ final class AppStore: ObservableObject {
         }
 
         return valid ? trimmed.uppercased() : nil
+    }
+}
+
+struct MiniViewerScreenOption: Identifiable, Hashable {
+    let target: MiniViewerScreenTarget
+    let label: String
+
+    var id: String {
+        target.storageValue
+    }
+}
+
+private struct MiniViewerScreenCatalog {
+    let options: [MiniViewerScreenOption]
+    let warningMessage: String?
+
+    init(pinnedTarget: MiniViewerScreenTarget, pinnedLabelSnapshot: String) {
+        let detectedDisplays = NSScreen.screens.compactMap(MiniViewerDetectedDisplay.init(screen:))
+        let detectedDisplaysByTarget = Dictionary(uniqueKeysWithValues: detectedDisplays.map { ($0.target, $0) })
+
+        var builtOptions: [MiniViewerScreenOption] = [
+            MiniViewerScreenOption(target: .primary, label: "Primary screen")
+        ]
+
+        let builtInDisplay = detectedDisplays.first(where: \.isBuiltIn)
+        if let builtInDisplay {
+            builtOptions.append(MiniViewerScreenOption(target: .builtIn, label: builtInDisplay.builtInLabel))
+        } else if pinnedTarget == .builtIn {
+            builtOptions.append(MiniViewerScreenOption(target: .builtIn, label: "Built-in screen"))
+        }
+
+        let externalOptions = detectedDisplays
+            .filter { !$0.isBuiltIn }
+            .map { MiniViewerScreenOption(target: $0.target, label: $0.optionLabel) }
+            .sorted { $0.label.localizedCaseInsensitiveCompare($1.label) == .orderedAscending }
+        builtOptions.append(contentsOf: externalOptions)
+
+        if case let .display(identifier) = pinnedTarget,
+           detectedDisplaysByTarget[pinnedTarget] == nil {
+            let fallbackLabel = pinnedLabelSnapshot.isEmpty
+                ? "External display [\(MiniViewerDetectedDisplay.shortIdentifier(for: identifier))]"
+                : pinnedLabelSnapshot
+            builtOptions.append(MiniViewerScreenOption(target: .display(identifier), label: fallbackLabel))
+        }
+
+        options = builtOptions
+
+        switch pinnedTarget {
+        case .primary:
+            warningMessage = nil
+        case .builtIn:
+            if builtInDisplay != nil {
+                warningMessage = nil
+            } else {
+                warningMessage = "Built-in screen is unavailable. Mini viewer is temporarily using Primary screen until it returns."
+            }
+        case .display:
+            if detectedDisplaysByTarget[pinnedTarget] == nil {
+                let label = builtOptions.first(where: { $0.target == pinnedTarget })?.label ?? "Selected screen"
+                warningMessage = "\(label) is unavailable. Mini viewer is temporarily using Primary screen until it returns."
+            } else {
+                warningMessage = nil
+            }
+        }
+    }
+}
+
+private struct MiniViewerDetectedDisplay {
+    let target: MiniViewerScreenTarget
+    let optionLabel: String
+    let builtInLabel: String
+    let isBuiltIn: Bool
+
+    init?(screen: NSScreen) {
+        guard let displayID = screen.agentManagerXDisplayID else {
+            return nil
+        }
+
+        let isBuiltIn = CGDisplayIsBuiltin(displayID) != 0
+        self.isBuiltIn = isBuiltIn
+
+        if isBuiltIn {
+            target = .display(Self.stableIdentifier(for: displayID))
+            builtInLabel = "Built-in screen"
+            optionLabel = builtInLabel
+            return
+        }
+
+        let identifier = Self.stableIdentifier(for: displayID)
+        let name = Self.friendlyExternalName(for: screen)
+        target = .display(identifier)
+        builtInLabel = "Built-in screen"
+        optionLabel = "\(name) [\(Self.shortIdentifier(for: identifier))]"
+    }
+
+    private static func friendlyExternalName(for screen: NSScreen) -> String {
+        let trimmedName = screen.localizedName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmedName.isEmpty ? "External display" : trimmedName
+    }
+
+    private static func stableIdentifier(for displayID: CGDirectDisplayID) -> String {
+        if let unmanaged = CGDisplayCreateUUIDFromDisplayID(displayID) {
+            let uuid = unmanaged.takeRetainedValue()
+            return (CFUUIDCreateString(nil, uuid) as String).uppercased()
+        }
+
+        return "display-\(displayID)"
+    }
+
+    static func shortIdentifier(for identifier: String) -> String {
+        let normalized = identifier
+            .replacingOccurrences(of: "display:", with: "")
+            .replacingOccurrences(of: "-", with: "")
+            .lowercased()
+        return String(normalized.prefix(8))
+    }
+}
+
+private extension NSScreen {
+    var agentManagerXDisplayID: CGDirectDisplayID? {
+        guard let screenNumber = deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber else {
+            return nil
+        }
+        return CGDirectDisplayID(screenNumber.uint32Value)
     }
 }
 

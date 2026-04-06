@@ -65,6 +65,50 @@ enum MiniViewerSide: String, Codable, CaseIterable {
     case right
 }
 
+enum MiniViewerScreenTarget: Hashable, Codable {
+    case primary
+    case builtIn
+    case display(String)
+
+    init(storageValue: String?) {
+        guard let storageValue else {
+            self = .primary
+            return
+        }
+
+        if storageValue == "primary" {
+            self = .primary
+            return
+        }
+
+        if storageValue == "builtin" {
+            self = .builtIn
+            return
+        }
+
+        if storageValue.hasPrefix("display:") {
+            let identifier = String(storageValue.dropFirst("display:".count))
+            if !identifier.isEmpty {
+                self = .display(identifier)
+                return
+            }
+        }
+
+        self = .primary
+    }
+
+    var storageValue: String {
+        switch self {
+        case .primary:
+            return "primary"
+        case .builtIn:
+            return "builtin"
+        case let .display(identifier):
+            return "display:\(identifier)"
+        }
+    }
+}
+
 enum ThemePreference: String, Codable, CaseIterable {
     case dark
     case light

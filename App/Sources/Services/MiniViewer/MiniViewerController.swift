@@ -38,9 +38,12 @@ final class MiniViewerController {
     private let payloadQueue = DispatchQueue(label: "MiniViewerController.payloadQueue", qos: .utility)
 
     private var side: MiniViewerSide
+    private var showOnActiveMonitor: Bool
+    private var pinnedScreenTarget: MiniViewerScreenTarget
     private var uiElementSize: UIElementSize
     private var showRecentSessionsOnly: Bool
     private var recentActivityWindowMinutes: Int
+    private var maxSessions: Int
     private var useSlowerCompatibleProjectSwitching: Bool
     private var isVisible = true
 
@@ -75,9 +78,12 @@ final class MiniViewerController {
         self.fileManager = fileManager
 
         side = settings.miniViewerSide
+        showOnActiveMonitor = settings.miniViewerShowOnActiveMonitor
+        pinnedScreenTarget = settings.miniViewerPinnedScreenTarget
         uiElementSize = settings.miniViewerUIElementSize.clampedForMiniViewer
         showRecentSessionsOnly = settings.miniViewerShowRecentSessionsOnly
         recentActivityWindowMinutes = settings.miniViewerRecentActivityWindowMinutes
+        maxSessions = settings.miniViewerMaxSessions
         useSlowerCompatibleProjectSwitching = settings.useSlowerCompatibleProjectSwitching
     }
 
@@ -85,6 +91,16 @@ final class MiniViewerController {
         queue.async {
             self.side = side
             self.settings.miniViewerSide = side
+            self.requestPayloadRefreshLocked()
+        }
+    }
+
+    func setScreenSelection(showOnActiveMonitor: Bool, pinnedScreenTarget: MiniViewerScreenTarget) {
+        queue.async {
+            self.showOnActiveMonitor = showOnActiveMonitor
+            self.pinnedScreenTarget = pinnedScreenTarget
+            self.settings.miniViewerShowOnActiveMonitor = showOnActiveMonitor
+            self.settings.miniViewerPinnedScreenTarget = pinnedScreenTarget
             self.requestPayloadRefreshLocked()
         }
     }
@@ -105,6 +121,15 @@ final class MiniViewerController {
             self.recentActivityWindowMinutes = clampedMinutes
             self.settings.miniViewerShowRecentSessionsOnly = enabled
             self.settings.miniViewerRecentActivityWindowMinutes = clampedMinutes
+            self.requestPayloadRefreshLocked()
+        }
+    }
+
+    func setMaxSessions(_ value: Int) {
+        queue.async {
+            let clampedValue = max(1, value)
+            self.maxSessions = clampedValue
+            self.settings.miniViewerMaxSessions = clampedValue
             self.requestPayloadRefreshLocked()
         }
     }
@@ -210,6 +235,8 @@ final class MiniViewerController {
         var environment = ProcessInfo.processInfo.environment
         environment["MINI_VIEWER_ICON_DIR"] = iconDirectoryPath.path
         environment["MINI_VIEWER_SIDE"] = side.rawValue
+        environment["MINI_VIEWER_SHOW_ON_ACTIVE_MONITOR"] = showOnActiveMonitor ? "1" : "0"
+        environment["MINI_VIEWER_PINNED_SCREEN_TARGET"] = pinnedScreenTarget.storageValue
         environment["MINI_VIEWER_UI_ELEMENT_SIZE"] = uiElementSize.rawValue
         child.environment = environment
 
@@ -354,6 +381,8 @@ final class MiniViewerController {
     private func writePayloadLocked(projects: [MiniViewerProjectPayload]) {
         let payload = MiniViewerPayload(
             side: side,
+            showOnActiveMonitor: showOnActiveMonitor,
+            pinnedScreenTarget: pinnedScreenTarget.storageValue,
             uiElementSize: uiElementSize,
             isVisible: isVisible,
             projects: projects
@@ -392,6 +421,22 @@ final class MiniViewerController {
                 }
                 return lastActivityDate >= cutoff
             }
+        }
+
+        visibleSessions.sort { lhs, rhs in
+            let lhsPriority = miniViewerPriority(for: lhs.status)
+            let rhsPriority = miniViewerPriority(for: rhs.status)
+            if lhsPriority != rhsPriority {
+                return lhsPriority < rhsPriority
+            }
+
+            let lhsDate = SessionParsingSupport.parseISODate(lhs.lastActivityAt) ?? .distantPast
+            let rhsDate = SessionParsingSupport.parseISODate(rhs.lastActivityAt) ?? .distantPast
+            return lhsDate > rhsDate
+        }
+
+        if visibleSessions.count > maxSessions {
+            visibleSessions = Array(visibleSessions.prefix(maxSessions))
         }
 
         var projects: [MiniViewerProjectPayload] = []
@@ -435,6 +480,17 @@ final class MiniViewerController {
         }
 
         return projects
+    }
+
+    private func miniViewerPriority(for status: SessionStatus) -> Int {
+        switch status {
+        case .waiting:
+            return 0
+        case .processing, .thinking:
+            return 1
+        case .idle, .stale:
+            return 2
+        }
     }
 
     private func normalizedBranch(_ branch: String?) -> String? {
@@ -721,6 +777,8 @@ private struct MiniViewerProjectPayload: Codable {
 
 private struct MiniViewerPayload: Codable {
     let side: MiniViewerSide
+    let showOnActiveMonitor: Bool
+    let pinnedScreenTarget: String
     let uiElementSize: UIElementSize
     let isVisible: Bool
     let projects: [MiniViewerProjectPayload]
