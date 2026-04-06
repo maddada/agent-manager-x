@@ -31,8 +31,12 @@ final class ProcessIntrospectionService {
     private let shell: ShellCommandRunning
     private let processListCacheTTL: TimeInterval = 0.8
     private let processListCacheLock = NSLock()
+    private let processMetadataCacheTTL: TimeInterval = 12
+    private let processMetadataCacheLock = NSLock()
     private var cachedProcessList: [ProcessSnapshot] = []
     private var cachedProcessListAt: Date = .distantPast
+    private var cachedWorkingDirectories: [Int: CachedProcessString] = [:]
+    private var cachedOpenFilePaths: [Int: CachedOpenFilePaths] = [:]
 
     init(shell: ShellCommandRunning = ShellCommandRunner()) {
         self.shell = shell
@@ -61,10 +65,21 @@ final class ProcessIntrospectionService {
             .compactMap(parsePSLine)
 
         storeProcessListCache(snapshots, capturedAt: now)
+        pruneProcessMetadataCaches(validPIDs: Set(snapshots.map(\.pid)))
         return snapshots
     }
 
     func workingDirectory(pid: Int) -> String? {
+        let now = Date()
+        processMetadataCacheLock.lock()
+        if let cached = cachedWorkingDirectories[pid],
+           now.timeIntervalSince(cached.fetchedAt) < processMetadataCacheTTL {
+            let value = cached.value
+            processMetadataCacheLock.unlock()
+            return value
+        }
+        processMetadataCacheLock.unlock()
+
         let result = shell.run(
             executable: "/usr/sbin/lsof",
             arguments: ["-a", "-p", String(pid), "-d", "cwd", "-Fn"],
@@ -77,10 +92,24 @@ final class ProcessIntrospectionService {
             return nil
         }
 
-        return parseLsofNames(result.stdout).first
+        let cwd = parseLsofNames(result.stdout).first
+        processMetadataCacheLock.lock()
+        cachedWorkingDirectories[pid] = CachedProcessString(value: cwd, fetchedAt: now)
+        processMetadataCacheLock.unlock()
+        return cwd
     }
 
     func openFilePaths(pid: Int) -> [String] {
+        let now = Date()
+        processMetadataCacheLock.lock()
+        if let cached = cachedOpenFilePaths[pid],
+           now.timeIntervalSince(cached.fetchedAt) < processMetadataCacheTTL {
+            let value = cached.value
+            processMetadataCacheLock.unlock()
+            return value
+        }
+        processMetadataCacheLock.unlock()
+
         let result = shell.run(
             executable: "/usr/sbin/lsof",
             arguments: ["-Fn", "-p", String(pid)],
@@ -93,7 +122,11 @@ final class ProcessIntrospectionService {
             return []
         }
 
-        return parseLsofNames(result.stdout)
+        let paths = parseLsofNames(result.stdout)
+        processMetadataCacheLock.lock()
+        cachedOpenFilePaths[pid] = CachedOpenFilePaths(value: paths, fetchedAt: now)
+        processMetadataCacheLock.unlock()
+        return paths
     }
 
     func newestOpenFile(
@@ -273,4 +306,21 @@ final class ProcessIntrospectionService {
         cachedProcessListAt = capturedAt
         processListCacheLock.unlock()
     }
+
+    private func pruneProcessMetadataCaches(validPIDs: Set<Int>) {
+        processMetadataCacheLock.lock()
+        cachedWorkingDirectories = cachedWorkingDirectories.filter { validPIDs.contains($0.key) }
+        cachedOpenFilePaths = cachedOpenFilePaths.filter { validPIDs.contains($0.key) }
+        processMetadataCacheLock.unlock()
+    }
+}
+
+private struct CachedProcessString {
+    let value: String?
+    let fetchedAt: Date
+}
+
+private struct CachedOpenFilePaths {
+    let value: [String]
+    let fetchedAt: Date
 }

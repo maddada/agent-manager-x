@@ -131,20 +131,17 @@ final class OpenCodeSessionDetector: AgentSessionDetecting {
         return files
             .filter { $0.pathExtension == "json" }
             .compactMap { file in
-                guard let data = try? Data(contentsOf: file) else { return nil }
-                return try? JSONDecoder().decode(OpenCodeProject.self, from: data)
+                SessionParsingSupport.decodeJSONFile(OpenCodeProject.self, at: file)
             }
     }
 
     private func loadOpenCodeSession(filePath: String) -> OpenCodeSession? {
         let url = URL(fileURLWithPath: filePath)
-        guard url.pathExtension == "json",
-              let data = try? Data(contentsOf: url)
-        else {
+        guard url.pathExtension == "json" else {
             return nil
         }
 
-        return try? JSONDecoder().decode(OpenCodeSession.self, from: data)
+        return SessionParsingSupport.decodeJSONFile(OpenCodeSession.self, at: url)
     }
 
     private func findMatchingProcess(cwdToProcess: [String: AgentProcess], project: OpenCodeProject) -> AgentProcess? {
@@ -305,9 +302,7 @@ final class OpenCodeSessionDetector: AgentSessionDetecting {
 
         var messages: [OpenCodeMessage] = []
         for file in messageFiles where file.pathExtension == "json" {
-            guard let data = try? Data(contentsOf: file),
-                  let message = try? JSONDecoder().decode(OpenCodeMessage.self, from: data)
-            else {
+            guard let message = SessionParsingSupport.decodeJSONFile(OpenCodeMessage.self, at: file) else {
                 continue
             }
             messages.append(message)
@@ -409,9 +404,7 @@ final class OpenCodeSessionDetector: AgentSessionDetecting {
         var hasReasoning = false
 
         for file in partFiles where file.pathExtension == "json" {
-            guard let data = try? Data(contentsOf: file),
-                  let part = try? JSONDecoder().decode(OpenCodePart.self, from: data)
-            else {
+            guard let part = SessionParsingSupport.decodeJSONFile(OpenCodePart.self, at: file) else {
                 continue
             }
 

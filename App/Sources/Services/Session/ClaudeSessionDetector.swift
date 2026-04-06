@@ -367,7 +367,7 @@ final class ClaudeSessionDetector: AgentSessionDetecting {
     }
 
     private func subagentSessionID(from fileURL: URL) -> String? {
-        guard let text = try? String(contentsOf: fileURL, encoding: .utf8) else {
+        guard let text = SessionParsingSupport.textContents(at: fileURL) else {
             return nil
         }
 

@@ -326,6 +326,14 @@ private struct MiniViewerChromeScaleKey: EnvironmentKey {
     static let defaultValue: CGFloat = 1.0
 }
 
+private struct SessionIconFramePreferenceKey: PreferenceKey {
+    static var defaultValue: [String: CGRect] = [:]
+
+    static func reduce(value: inout [String: CGRect], nextValue: () -> [String: CGRect]) {
+        value.merge(nextValue(), uniquingKeysWith: { _, new in new })
+    }
+}
+
 private extension EnvironmentValues {
     var miniViewerFontScale: CGFloat {
         get { self[MiniViewerFontScaleKey.self] }
@@ -540,6 +548,14 @@ private struct SessionRowView: View {
                 ZStack(alignment: .bottomTrailing) {
                     largeStatusIndicator
                         .frame(width: 20 * chromeScale, height: 20 * chromeScale)
+                        .background(
+                            GeometryReader { proxy in
+                                Color.clear.preference(
+                                    key: SessionIconFramePreferenceKey.self,
+                                    value: [session.id: proxy.frame(in: .named("MiniViewerRoot"))]
+                                )
+                            }
+                        )
 
                     if showDetails {
                         Group {
@@ -719,6 +735,7 @@ private struct MiniViewerRootView: View {
     let onActivate: (MiniViewerSession) -> Void
     let onMiddleClick: (MiniViewerSession) -> Void
     let onRightClick: (MiniViewerSession) -> Void
+    let onIconFramesChanged: ([String: CGRect]) -> Void
 
     private var chromeScale: CGFloat {
         model.uiElementSize.chromeScale
@@ -751,6 +768,10 @@ private struct MiniViewerRootView: View {
             }
             .padding(8 * chromeScale)
         }
+        .coordinateSpace(name: "MiniViewerRoot")
+        .onPreferenceChange(SessionIconFramePreferenceKey.self) { frames in
+            onIconFramesChanged(frames)
+        }
         .environment(\.miniViewerFontScale, model.uiElementSize.fontScale)
         .environment(\.miniViewerChromeScale, model.uiElementSize.chromeScale)
     }
@@ -762,6 +783,7 @@ final class MiniViewerAppDelegate: NSObject, NSApplicationDelegate {
     private var window: NSPanel?
     private var cancellables = Set<AnyCancellable>()
     private var hoverTimer: Timer?
+    private var iconFrames: [String: CGRect] = [:]
 
     private var chromeScale: CGFloat { model.uiElementSize.chromeScale }
     private var collapsedWidth: CGFloat { 64 * chromeScale }
@@ -773,10 +795,6 @@ final class MiniViewerAppDelegate: NSObject, NSApplicationDelegate {
     private var projectBottomPadding: CGFloat { 2 * chromeScale }
     private var rootPaddingTopBottom: CGFloat { 16 * chromeScale }
     private var rootProjectSpacing: CGFloat { 8 * chromeScale }
-    private var rootPadding: CGFloat { 8 * chromeScale }
-    private var rowHorizontalPadding: CGFloat { 8 * chromeScale }
-    private var iconClusterSize: CGFloat { 34 * chromeScale }
-    private var iconHoverSize: CGFloat { 20 * chromeScale }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         applyInitialConfigurationFromEnvironment()
@@ -824,6 +842,9 @@ final class MiniViewerAppDelegate: NSObject, NSApplicationDelegate {
                 },
                 onRightClick: { [weak self] session in
                     self?.openMainWindow(for: session)
+                },
+                onIconFramesChanged: { [weak self] frames in
+                    self?.iconFrames = frames
                 }
             )
         )
@@ -958,52 +979,15 @@ final class MiniViewerAppDelegate: NSObject, NSApplicationDelegate {
 
     private func updateHoverStateFromPointer() {
         guard let panel = window else { return }
+        guard let contentView = panel.contentView else { return }
 
         let pointer = NSEvent.mouseLocation
-        let hoveringIcon = collapsedIconRects(panelFrame: panel.frame)
-            .contains(where: { $0.contains(pointer) })
+        let hoveringIcon = iconFrames.values.contains { iconFrame in
+            let windowRect = contentView.convert(iconFrame, to: nil)
+            let screenRect = panel.convertToScreen(windowRect)
+            return screenRect.contains(pointer)
+        }
         model.setHovering(hoveringIcon)
-    }
-
-    private func collapsedIconRects(panelFrame: NSRect) -> [NSRect] {
-        guard model.hasVisibleSessions else {
-            return []
-        }
-
-        let iconX = panelFrame.minX
-            + rowHorizontalPadding
-            + ((iconClusterSize - iconHoverSize) / 2.0)
-
-        var rects: [NSRect] = []
-        var currentTop = panelFrame.maxY - rootPadding
-
-        for (projectIndex, project) in model.projects.enumerated() {
-            currentTop -= projectHeaderHeight
-
-            for _ in project.sessions {
-                currentTop -= projectStackSpacing
-
-                let rowBottom = currentTop - rowHeight
-                let iconY = rowBottom + ((rowHeight - iconHoverSize) / 2.0)
-                rects.append(
-                    NSRect(
-                        x: iconX,
-                        y: iconY,
-                        width: iconHoverSize,
-                        height: iconHoverSize
-                    )
-                )
-
-                currentTop = rowBottom
-            }
-
-            currentTop -= projectBottomPadding
-            if projectIndex < model.projects.count - 1 {
-                currentTop -= rootProjectSpacing
-            }
-        }
-
-        return rects
     }
 
     private func activateSession(_ session: MiniViewerSession) {

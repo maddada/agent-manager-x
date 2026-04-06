@@ -4,6 +4,8 @@ final class CodexSessionDetector: AgentSessionDetecting {
     let agentType: AgentType = .codex
 
     private let processService: ProcessIntrospectionService
+    private let parsedSessionCacheLock = NSLock()
+    private var parsedSessionCache: [String: CachedParsedCodexSession] = [:]
 
     init(processService: ProcessIntrospectionService) {
         self.processService = processService
@@ -175,8 +177,8 @@ final class CodexSessionDetector: AgentSessionDetecting {
     }
 
     private func codexSessionParseLimit(processCount: Int) -> Int {
-        let filesPerProcess = 12
-        let maxParseFiles = 120
+        let filesPerProcess = 6
+        let maxParseFiles = 48
         let minParseFiles = max(processCount, 2)
         return min(max(processCount * filesPerProcess, minParseFiles), maxParseFiles)
     }
@@ -220,17 +222,26 @@ final class CodexSessionDetector: AgentSessionDetecting {
             return
         }
 
-        let sorted = entries.sorted { $0.lastPathComponent > $1.lastPathComponent }
+        let sortedEntries: [(url: URL, isDirectory: Bool, modified: Date)] = entries.map { entry in
+            let values = try? entry.resourceValues(forKeys: [.isDirectoryKey, .contentModificationDateKey])
+            return (
+                url: entry,
+                isDirectory: values?.isDirectory == true,
+                modified: values?.contentModificationDate ?? .distantPast
+            )
+        }
+        .sorted { lhs, rhs in
+            lhs.modified > rhs.modified
+        }
 
-        for entry in sorted {
+        for entry in sortedEntries {
             if candidates.count >= maxCandidates {
                 return
             }
 
-            let values = try? entry.resourceValues(forKeys: [.isDirectoryKey, .contentModificationDateKey])
-            if values?.isDirectory == true {
+            if entry.isDirectory {
                 searchCodexFilesRecursively(
-                    directory: entry,
+                    directory: entry.url,
                     maxCandidates: maxCandidates,
                     seen: &seen,
                     into: &candidates
@@ -238,11 +249,10 @@ final class CodexSessionDetector: AgentSessionDetecting {
                 continue
             }
 
-            guard entry.pathExtension == "jsonl" else { continue }
-            guard seen.insert(entry.path).inserted else { continue }
+            guard entry.url.pathExtension == "jsonl" else { continue }
+            guard seen.insert(entry.url.path).inserted else { continue }
 
-            let modified = values?.contentModificationDate ?? .distantPast
-            candidates.append((path: entry.path, modified: modified))
+            candidates.append((path: entry.url.path, modified: entry.modified))
         }
     }
 
@@ -252,8 +262,17 @@ final class CodexSessionDetector: AgentSessionDetecting {
     }
 
     private func parseCodexSessionFile(path: String, modified: Date) -> CodexSessionFile? {
+        parsedSessionCacheLock.lock()
+        if let cached = parsedSessionCache[path],
+           cached.modified == modified {
+            let value = cached.value
+            parsedSessionCacheLock.unlock()
+            return value
+        }
+        parsedSessionCacheLock.unlock()
+
         let url = URL(fileURLWithPath: path)
-        guard let text = try? String(contentsOf: url, encoding: .utf8) else {
+        guard let text = SessionParsingSupport.textContents(at: url) else {
             return nil
         }
 
@@ -414,7 +433,7 @@ final class CodexSessionDetector: AgentSessionDetecting {
 
         let cwd = selectBestCodexCWD(cwdTurn: cwdTurn, cwdEnv: cwdEnv, cwdMeta: cwdMeta)
 
-        return CodexSessionFile(
+        let parsed = CodexSessionFile(
             path: path,
             modified: modified,
             cwd: cwd,
@@ -427,6 +446,11 @@ final class CodexSessionDetector: AgentSessionDetecting {
             lastInterruptAt: lastInterruptAt,
             lastTerminalEventAt: lastTerminalEventAt
         )
+
+        parsedSessionCacheLock.lock()
+        parsedSessionCache[path] = CachedParsedCodexSession(modified: modified, value: parsed)
+        parsedSessionCacheLock.unlock()
+        return parsed
     }
 
     private func extractTextFromCodexPayload(_ payload: [String: Any]) -> String? {
@@ -638,4 +662,9 @@ final class CodexSessionDetector: AgentSessionDetecting {
             isBackground: isBackgroundSession(projectPath: projectPath, lastMessage: nil, cpuUsage: process.cpuUsage)
         )
     }
+}
+
+private struct CachedParsedCodexSession {
+    let modified: Date
+    let value: CodexSessionFile?
 }

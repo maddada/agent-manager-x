@@ -814,7 +814,7 @@ final class AppStore: ObservableObject {
 
     private func startPolling() {
         pollTimer?.invalidate()
-        pollTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { [weak self] _ in
+        pollTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
                 self?.refresh(fromTimer: true)
             }
@@ -822,6 +822,8 @@ final class AppStore: ObservableObject {
     }
 
     private func apply(response: SessionsResponse) {
+        miniViewerController.updateSessionsResponse(response)
+
         let background: [Session]
         let visibleSessions: [Session]
 

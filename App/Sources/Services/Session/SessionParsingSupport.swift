@@ -161,6 +161,10 @@ protocol AgentSessionDetecting {
 
 enum SessionParsingSupport {
     static let now: () -> Date = { Date() }
+    private static let cacheLock = NSLock()
+    private static var textFileCache: [String: CachedTextFile] = [:]
+    private static var decodedFileCache: [String: CachedDecodedFile] = [:]
+    private static var claudeMessageCache: [String: CachedClaudeMessageData] = [:]
 
     static let isoFormatterWithFractional: ISO8601DateFormatter = {
         let formatter = ISO8601DateFormatter()
@@ -341,10 +345,7 @@ enum SessionParsingSupport {
     }
 
     static func parseJSONLines(url: URL) -> [[String: Any]] {
-        guard
-            let data = try? Data(contentsOf: url),
-            let text = String(data: data, encoding: .utf8)
-        else {
+        guard let text = textContents(at: url) else {
             return []
         }
 
@@ -356,7 +357,70 @@ enum SessionParsingSupport {
             }
     }
 
+    static func textContents(at url: URL) -> String? {
+        let path = url.path
+        let modified = modifiedDate(for: path)
+
+        cacheLock.lock()
+        if let cached = textFileCache[path],
+           cached.modified == modified {
+            let text = cached.text
+            cacheLock.unlock()
+            return text
+        }
+        cacheLock.unlock()
+
+        guard
+            let data = try? Data(contentsOf: url),
+            let text = String(data: data, encoding: .utf8)
+        else {
+            return nil
+        }
+
+        cacheLock.lock()
+        textFileCache[path] = CachedTextFile(modified: modified, text: text)
+        cacheLock.unlock()
+        return text
+    }
+
+    static func decodeJSONFile<T: Decodable>(_ type: T.Type, at url: URL) -> T? {
+        let path = url.path
+        let modified = modifiedDate(for: path)
+        let cacheKey = "\(String(reflecting: T.self))|\(path)"
+
+        cacheLock.lock()
+        if let cached = decodedFileCache[cacheKey],
+           cached.modified == modified,
+           let value = cached.value as? T {
+            cacheLock.unlock()
+            return value
+        }
+        cacheLock.unlock()
+
+        guard let data = try? Data(contentsOf: url),
+              let decoded = try? JSONDecoder().decode(T.self, from: data) else {
+            return nil
+        }
+
+        cacheLock.lock()
+        decodedFileCache[cacheKey] = CachedDecodedFile(modified: modified, value: decoded)
+        cacheLock.unlock()
+        return decoded
+    }
+
     static func parseClaudeMessageData(url: URL) -> ClaudeMessageData? {
+        let path = url.path
+        let modified = modifiedDate(for: path)
+
+        cacheLock.lock()
+        if let cached = claudeMessageCache[path],
+           cached.modified == modified {
+            let value = cached.value
+            cacheLock.unlock()
+            return value
+        }
+        cacheLock.unlock()
+
         let lines = parseJSONLines(url: url)
         guard !lines.isEmpty else { return nil }
 
@@ -492,7 +556,7 @@ enum SessionParsingSupport {
             hasPendingTask = false
         }
 
-        return ClaudeMessageData(
+        let parsed = ClaudeMessageData(
             sessionID: sessionID,
             gitBranch: gitBranch,
             lastTimestamp: lastTimestamp,
@@ -507,6 +571,11 @@ enum SessionParsingSupport {
             hasPendingTask: hasPendingTask,
             lastTaskSignalAt: lastTaskSignalTimestamp
         )
+
+        cacheLock.lock()
+        claudeMessageCache[path] = CachedClaudeMessageData(modified: modified, value: parsed)
+        cacheLock.unlock()
+        return parsed
     }
 
     private static func isDate(_ candidate: Date, newerThan baseline: Date?) -> Bool {
@@ -724,4 +793,19 @@ extension Session {
     var sortableLastActivityDate: Date {
         SessionParsingSupport.parseISODate(lastActivityAt) ?? .distantPast
     }
+}
+
+private struct CachedTextFile {
+    let modified: Date
+    let text: String
+}
+
+private struct CachedDecodedFile {
+    let modified: Date
+    let value: Any
+}
+
+private struct CachedClaudeMessageData {
+    let modified: Date
+    let value: ClaudeMessageData?
 }

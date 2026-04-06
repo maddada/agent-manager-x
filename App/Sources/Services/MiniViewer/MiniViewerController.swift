@@ -50,6 +50,12 @@ final class MiniViewerController {
     private var payloadRefreshInFlight = false
     private var payloadRefreshPending = false
     private var payloadRefreshGeneration: UInt64 = 0
+    private var latestSessionsResponse = SessionsResponse(
+        sessions: [],
+        backgroundSessions: [],
+        totalCount: 0,
+        waitingCount: 0
+    )
 
     private var diffCache: [String: CachedGitDiffStats] = [:]
 
@@ -111,6 +117,16 @@ final class MiniViewerController {
     func setOpenMainWindowHandler(_ handler: @escaping () -> Void) {
         queue.async {
             self.onOpenMainWindow = handler
+        }
+    }
+
+    func updateSessionsResponse(_ response: SessionsResponse) {
+        queue.async {
+            guard self.latestSessionsResponse != response else {
+                return
+            }
+            self.latestSessionsResponse = response
+            self.requestPayloadRefreshLocked()
         }
     }
 
@@ -219,13 +235,7 @@ final class MiniViewerController {
         // Push the first snapshot immediately so the helper does not wait for the periodic ticker.
         requestPayloadRefreshLocked()
 
-        let timer = DispatchSource.makeTimerSource(queue: queue)
-        timer.schedule(deadline: .now(), repeating: .seconds(3))
-        timer.setEventHandler { [weak self] in
-            self?.requestPayloadRefreshLocked()
-        }
-        timer.resume()
-        updaterTimer = timer
+        updaterTimer = nil
     }
 
     private func stopMiniViewerLocked() {
@@ -307,11 +317,12 @@ final class MiniViewerController {
         payloadRefreshPending = false
         payloadRefreshInFlight = true
         let generation = payloadRefreshGeneration
+        let response = latestSessionsResponse
 
         payloadQueue.async { [weak self] in
             guard let self else { return }
 
-            let projects = self.collectProjectPayload()
+            let projects = self.collectProjectPayload(from: response)
 
             self.queue.async {
                 self.payloadRefreshInFlight = false
@@ -357,9 +368,7 @@ final class MiniViewerController {
         }
     }
 
-    private func collectProjectPayload() -> [MiniViewerProjectPayload] {
-        let response = sessionDetectionService.getAllSessions()
-
+    private func collectProjectPayload(from response: SessionsResponse) -> [MiniViewerProjectPayload] {
         var visibleSessions: [Session]
         if response.backgroundSessions.isEmpty {
             visibleSessions = response.sessions.filter { !$0.isBackground }
