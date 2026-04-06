@@ -1,175 +1,200 @@
 ---
-children_hash: 7749adb5fbbc6da0be2c96dc0164731517603e383b973f5f71bb00258764093e
-compression_ratio: 0.6574500768049155
+children_hash: e709e6268d1fc3f03fb9e3bc1cba4dde87e3654953df31f7bff81f50555e433d
+compression_ratio: 0.5157830217591174
 condensation_order: 1
 covers: [context.md, dashboard_session_source.md, session_models.md, vsmux_live_session_mode.md]
-covers_token_total: 2604
+covers_token_total: 3263
 summary_level: d1
-token_count: 1712
+token_count: 1683
 type: summary
 ---
 # session_management
 
 ## Overview
-`context.md` defines `session_management` as the architecture topic for dual-mode session retrieval in Agent Manager X: traditional process polling and the new VSmux-backed live session path. The topic centers on a shared `Session` normalization layer, an AppStore-controlled source switch, a local WebSocket broker, and UI behavior that changes based on session source.
+`context.md` defines `session_management` as the architecture for dual-mode session retrieval in Agent Manager X: traditional process-based polling and the new VSmux-backed live session mode. The topic centers on a shared `Session` model boundary, a local WebSocket broker, AppStore mode switching, and dashboard/UI behavior that changes based on the active source.
 
-## Entry Map
-- `vsmux_live_session_mode.md` — end-to-end architecture for VSmux live sessions
-- `session_models.md` — shared model and enum changes enabling both retrieval modes
-- `dashboard_session_source.md` — dashboard/session-card UI behavior for source-specific rendering
+## Child Entries
+- `dashboard_session_source.md`
+- `session_models.md`
+- `vsmux_live_session_mode.md`
 
-## Core Architecture
-- Session retrieval is now dual-mode:
-  - `processBased` continues using async polling
-  - `vsmuxSessions` uses a local WebSocket broker
-- The normalization boundary is the shared `Session` / `SessionsResponse` model described in `session_models.md`.
-- `App/Sources/AppState/AppStore.swift` is the orchestration point:
-  - tracks `sessionDetailsRetrievalMode`
-  - switches between polling and broker-driven updates
-  - discards stale process refresh results if the source changed away from `processBased`
-- `App/Sources/Services/Session/VSmuxSessionBroker.swift` provides push-based VSmux ingestion over local WebSocket port `47652`.
-- `App/Sources/Views/MainDashboardView.swift` renders a unified dashboard while conditionally hiding process-only controls in VSmux mode.
-- `App/Sources/Services/MiniViewer/MiniViewerController.swift` integrates VSmux-aware open/focus behavior.
+## Architectural Structure
 
-## Data Flow
-From `vsmux_live_session_mode.md` and `session_models.md`:
+### Dual retrieval modes
+Across `vsmux_live_session_mode.md`, `session_models.md`, and `dashboard_session_source.md`, session retrieval is split into:
+- `processBased`
+- `vsmuxSessions`
 
-1. User switches source to `vsmuxSessions`
-2. `AppStore` starts the broker and refreshes source state
-3. VSmux publishers connect on port `47652`
-4. Broker accepts only `workspaceSnapshot` envelopes
-5. Snapshots are stored by `workspaceId`
-6. `AppStore` maps workspace/session snapshots into shared `Session` models
-7. Dashboard and mini viewer render through the same `SessionsResponse` pipeline
-8. Opening a VSmux session first opens the project, then sends `focusSession`
+Key relationship:
+- `App/Sources/AppState/AppStore.swift` chooses the retrieval path.
+- Process mode continues async polling.
+- VSmux mode uses push updates from a local broker and bypasses normal process refresh behavior.
 
-This preserves one rendering pipeline while allowing different transport/update mechanisms.
-
-## Model Decisions
-From `session_models.md`:
-
-- `App/Sources/Core/Models/SessionModels.swift` was extended rather than replaced.
-- `SessionDetailsSource` now has:
-  - `processBased`
-  - `vsmuxSessions`
-- `Session` gained VSmux metadata:
+### Normalization boundary
+`session_models.md` establishes `App/Sources/Core/Models/SessionModels.swift` as the shared normalization layer:
+- `SessionDetailsSource` has `processBased` and `vsmuxSessions`
+- `Session` now carries both process-oriented fields and VSmux metadata:
   - `detailsSource`
   - `vsmuxWorkspaceID`
   - `vsmuxThreadID`
   - `sessionFilePath`
-- `AgentType.t3` was added.
-- `renderID` was updated to avoid collisions across sources/workspaces; it incorporates:
-  - `detailsSource`
-  - workspace ID fallback
-  - agent type
-  - PID
-  - ID
 
-Architectural implication: source-specific ingestion is isolated before model normalization, minimizing downstream churn because `SessionsResponse` remains unchanged.
+Architectural decision:
+- `SessionsResponse` stays unchanged to minimize downstream churn.
+- Source-specific ingestion is converted into the same `Session` shape before UI rendering.
 
-## VSmux Broker and Focus Workflow
-From `vsmux_live_session_mode.md`:
+### VSmux transport and broker
+`vsmux_live_session_mode.md` introduces `App/Sources/Services/Session/VSmuxSessionBroker.swift`:
+- Local WebSocket broker
+- Port: `47652`
+- Accepts incoming envelope type `workspaceSnapshot`
+- Sends outgoing command type `focusSession`
 
-- Broker stack depends on Apple Network APIs:
+Dependencies called out there:
+- Apple Network framework:
   - `NWListener`
   - `NWConnection`
   - `NWProtocolWebSocket`
-- Accepted inbound envelope type: `workspaceSnapshot`
-- Outbound command type: `focusSession`
-- Pending focus requests are queued until all conditions are true:
+
+Broker responsibilities:
+- Store snapshots keyed by `workspaceId`
+- Emit sorted workspace updates
+- Queue pending focus requests until:
   - workspace exists
-  - requested session exists in latest snapshot
-  - a client connection exists for that workspace
-- Focus behavior is intentionally two-step:
-  1. open the correct project in the editor
-  2. request broker focus using `workspaceId` + `sessionId`
+  - requested session exists
+  - client connection exists
 
-This makes VSmux session activation workspace-aware rather than process-control-driven.
+## End-to-End Flow
 
-## UI and Rendering Behavior
-From `dashboard_session_source.md` and `vsmux_live_session_mode.md`:
-
-### Dashboard source selection
-- `MainDashboardView` adds a segmented picker bound to `store.sessionDetailsRetrievalMode`
-- Picker presents `SessionDetailsRetrievalMode.allCases`
-- Fact preserved: picker width is `260`
-- Toggle labels referenced in `vsmux_live_session_mode.md`:
-  - `Process based`
-  - `VSmux sessions`
-
-### Process-only controls
-Shown only in process mode:
-- background
-- kill idle
-- kill stale
-- per-agent kill actions
-
-### VSmux card behavior
-- visible preview uses mapped `displayName` / `lastMessage`
-- `isNewSession` is always false
-- full-message popovers are disabled / return `nil`
-- metrics line shows:
-  - `formatTimeAgo(lastActivityAt)`
-  - optional `Thread <first 8 chars>` when thread metadata exists
-
-### Process card behavior
-- continues to show process-centric metrics:
+### Process mode
+From `vsmux_live_session_mode.md` and `dashboard_session_source.md`:
+- Process mode remains the default persisted mode.
+- Polling interval remains `5.0 seconds`.
+- Dashboard exposes process-derived controls and telemetry.
+- Session cards can show:
   - PID
   - CPU
   - memory
-  - active subagent counts
+  - conversation preview
+  - active subagent count
 
-## State and Mapping Rules
+### VSmux mode
 From `vsmux_live_session_mode.md`:
+1. User switches source to `vsmuxSessions`
+2. `AppStore` starts broker-backed updates
+3. VSmux publishers connect on port `47652`
+4. `workspaceSnapshot` payloads update broker state
+5. `AppStore` maps snapshots into shared `Session` / `SessionsResponse`
+6. Dashboard and mini viewer render from the same shared pipeline
+7. Opening a session triggers:
+   - open project in editor first
+   - then send `focusSession` for `workspaceId` + `sessionId`
 
-- In VSmux mode, process-based refresh is paused.
-- Kill actions only work for process-based sessions.
-- If a process refresh finishes after source switched away from `processBased`, results are discarded and refresh flags are cleared.
-- VSmux session mapping includes:
-  - `id = session.sessionId`
-  - `projectName = workspace.workspaceName`
-  - `projectPath = workspace.workspacePath`
-  - `lastMessage = session.displayName`
-  - `detailsSource = .vsmuxSessions`
-  - `vsmuxWorkspaceID = workspace.workspaceId`
-  - `vsmuxThreadID = session.threadId`
+Important rule:
+- If an old process refresh completes after the source changed away from `processBased`, `AppStore` discards the results and clears refresh flags.
 
-### Status / agent mapping
-- status:
-  - `working` → `processing`
-  - `attention` → `waiting`
-  - all others → `idle`
-- agents:
-  - explicit mappings for `claude`, `codex`, `gemini`, `t3`
-  - unknown values default to `opencode`
+## UI and Behavior Differences
 
-## Shared Relationships
-- `context.md` explicitly positions:
-  - `session_models.md` as the shared model foundation
-  - `dashboard_session_source.md` as the UI layer for source-specific behavior
-- `dashboard_session_source.md` depends on:
-  - `AppStore` exposure of `sessionDetailsRetrievalMode`, `updateSessionDetailsRetrievalMode`, `agentCounts`, and refresh behavior
-  - `Session.detailsSource` and `vsmuxThreadID`
-- `vsmux_live_session_mode.md` ties together:
-  - broker transport
-  - AppStore switching logic
-  - session normalization
-  - mini viewer action routing
-  - dashboard constraints
+### Dashboard source selector
+`dashboard_session_source.md` documents `App/Sources/Core/Settings/SettingsTypes.swift` and `App/Sources/Views/MainDashboardView.swift`:
+- Segmented `Picker`
+- `labelsHidden()`
+- segmented style
+- fixed width `260`
+- hover popover description based on selected mode
 
-## Preserved Key Facts
-- VSmux broker port: `47652`
-- Process polling interval remains `5.0 seconds`
-- Mini viewer diff cache TTL: `60 seconds`
-- Mini viewer diff project cap: `6`
-- Main files:
-  - `App/Sources/Services/Session/VSmuxSessionBroker.swift`
-  - `App/Sources/AppState/AppStore.swift`
-  - `App/Sources/Views/MainDashboardView.swift`
-  - `App/Sources/Services/MiniViewer/MiniViewerController.swift`
-  - `App/Sources/Core/Models/SessionModels.swift`
+Important distinctions:
+- Persisted/raw labels: `Process based`, `VSmux sessions`
+- Display labels: `Processes`, `VSmux`
+- The visible label is hidden specifically to avoid header layout breakage.
 
-## Drill-down Guidance
-- Read `vsmux_live_session_mode.md` for transport, broker lifecycle, focus-session sequencing, and source-switching rules.
-- Read `session_models.md` for enum/field additions and `renderID` uniqueness strategy.
-- Read `dashboard_session_source.md` for exact dashboard picker behavior, process-only action gating, and VSmux session-card rendering differences.
+### Process-only controls
+`dashboard_session_source.md` states these are gated by:
+- `store.sessionDetailsRetrievalMode == .processBased`
+
+Only shown in process mode:
+- Background sessions button/panel
+- Kill idle sessions
+- Kill stale sessions
+- Kill-all-by-agent-type for:
+  - `claude`
+  - `codex`
+  - `opencode`
+
+Also:
+- Project group kill-all controls only appear in process mode.
+- Kill actions do not work for VSmux sessions.
+
+### Session card rendering
+Relationship between entries:
+- `session_models.md` provides the model fields
+- `dashboard_session_source.md` documents rendering differences
+- `vsmux_live_session_mode.md` explains why those differences exist
+
+Process-based cards:
+- use process telemetry
+- can show full-message popovers
+- can show CPU/memory/PID and richer process metrics
+
+VSmux cards:
+- use live-session metadata
+- show `session.displayName` as visible preview text
+- suppress full-message popovers
+- metrics show relative activity time with optional thread suffix
+- focus the exact session in VS Code rather than managing a process
+
+Additional UI facts from `dashboard_session_source.md`:
+- full message popover is disabled for VSmux sessions
+- popover timing is:
+  - show delay `0.65s`
+  - hide delay `0.16s`
+- masonry layout:
+  - minimum column width `360`
+  - spacing `14`
+
+## Model and Identity Details
+
+From `session_models.md`:
+- `AgentType.t3` was added.
+- `renderID` was updated to avoid collisions across session sources and workspaces.
+
+`renderID` includes:
+- `detailsSource`
+- workspace ID fallback
+- agent type
+- pid
+- id
+
+This is a key SwiftUI list-rendering decision: repeated logical IDs from different transport layers or workspaces should not collide.
+
+## Data Mapping and Semantics
+
+### VSmux session mapping
+From `vsmux_live_session_mode.md`, VSmux sessions map into shared `Session` fields such as:
+- `id = session.sessionId`
+- `projectName = workspace.workspaceName`
+- `projectPath = workspace.workspacePath`
+- `lastMessage = session.displayName`
+- `detailsSource = .vsmuxSessions`
+- `vsmuxWorkspaceID = workspace.workspaceId`
+- `vsmuxThreadID = session.threadId`
+
+### Status and agent mapping
+Also from `vsmux_live_session_mode.md`:
+- Status mapping:
+  - `working -> processing`
+  - `attention -> waiting`
+  - all others -> `idle`
+- Agent mapping:
+  - explicit: `claude`, `codex`, `gemini`, `t3`
+  - fallback: `opencode`
+
+## Mini Viewer Relationship
+`vsmux_live_session_mode.md` notes the mini viewer depends on an injected VSmux session open handler so actions route through AppStore instead of process control. Related facts:
+- diff cache TTL: `60 seconds`
+- diff project cap: `6`
+
+## Drill-Down Guide
+- Read `vsmux_live_session_mode.md` for broker architecture, port `47652`, `workspaceSnapshot` ingestion, and `focusSession` workflow.
+- Read `session_models.md` for `SessionDetailsSource`, VSmux metadata fields, `AgentType.t3`, and `renderID` uniqueness.
+- Read `dashboard_session_source.md` for segmented picker behavior, process-only action gating, session-card UI differences, hover descriptions, and layout constraints.

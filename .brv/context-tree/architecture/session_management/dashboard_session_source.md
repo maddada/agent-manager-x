@@ -1,44 +1,74 @@
 ---
 title: Dashboard Session Source
 tags: []
-related: [architecture/session_management/vsmux_live_session_mode.md, architecture/session_management/session_models.md]
+related: [architecture/session_management/context.md, architecture/session_management/vsmux_live_session_mode.md, architecture/session_management/session_models.md]
 keywords: []
-importance: 50
+importance: 55
 recency: 1
 maturity: draft
+updateCount: 1
 createdAt: '2026-04-06T12:29:45.770Z'
-updatedAt: '2026-04-06T12:29:45.770Z'
+updatedAt: '2026-04-06T16:35:16.496Z'
 ---
 ## Raw Concept
 **Task:**
-Document dashboard and session-card UI changes introduced by the VSmux session source.
+Document dashboard session source segmented control and process-based versus VSmux session behavior in Agent Manager X
 
 **Changes:**
-- Added segmented picker for selecting session source
-- Restricted destructive and process-specific controls to process mode
-- Changed VSmux cards to show session titles via lastMessage/displayName mapping
-- Changed VSmux metrics line to show recency and optional thread ID
+- Updated session source picker to hide visible label and use segmented display labels
+- Added hover descriptions explaining process-based versus VSmux session details modes
+- Restricted dashboard process actions and project kill-all actions to processBased mode
+- Documented session card differences for previews, metrics, and full-message availability by details source
 
 **Files:**
+- App/Sources/Core/Settings/SettingsTypes.swift
 - App/Sources/Views/MainDashboardView.swift
 
 **Flow:**
-user changes dashboard picker -> AppStore updates session source -> dashboard conditionally shows process controls -> session cards render source-specific preview, popover, and metrics behavior
+user selects session source -> store.updateSessionDetailsRetrievalMode(_) persists mode -> dashboard conditionally shows process actions -> session cards render source-specific preview, metrics, and popover behavior
 
 **Timestamp:** 2026-04-06
 
+**Patterns:**
+- `store\.sessionDetailsRetrievalMode\s*==\s*\.processBased` - Condition used to gate process-only dashboard and project actions
+- `session\.detailsSource\s*==\s*\.vsmuxSessions` - Condition used to switch session card behavior for VSmux sessions
+
 ## Narrative
 ### Structure
-MainDashboardView adds a top-bar segmented Picker bound to store.sessionDetailsRetrievalMode and iterates over SessionDetailsRetrievalMode.allCases to present the available sources. The view uses helper flags named showsProcessActions in both the header and session-card scopes so the same rendering tree can selectively hide controls that only make sense for process-based sessions.
+Session source selection is defined in SettingsTypes.swift through SessionDetailsRetrievalMode with processBased and vsmuxSessions cases, then surfaced in MainDashboardView.swift as a segmented Picker with labelsHidden(), segmented style, fixed width 260, and a hoverPopover using the currently selected mode description. The visible labels are displayName values Processes and VSmux while the persisted enum raw values remain Process based and VSmux sessions.
 
 ### Dependencies
-This UI depends on AppStore exposing sessionDetailsRetrievalMode, updateSessionDetailsRetrievalMode, agentCounts, and refresh behavior. Session-card rendering also depends on session.detailsSource and vsmuxThreadID from the shared Session model.
+The dashboard depends on store.sessionDetailsRetrievalMode to decide whether to expose process-derived controls such as background sessions, idle/stale kill actions, and kill-all-by-agent-type controls. Session cards also depend on session.detailsSource to decide whether message previews, metrics, and destructive controls should use process-based process telemetry or VSmux live-session metadata.
 
 ### Highlights
-The header title remains Agent Manager X and the refresh button still calls store.refresh(showInitialLoading: true). In VSmux mode, preview text comes from the mapped displayName value, isNewSession is forced false, fullMessage returns nil, and the metrics line displays formatTimeAgo(lastActivityAt) plus Thread <first 8 chars> when thread metadata exists. Process sessions continue to use PID, CPU, memory, and active subagent counts.
+processBased remains the default persisted mode. The UI hides the picker label specifically to prevent header layout breakage. VSmux mode focuses exact sessions in VS Code and suppresses full-message popovers, while process-based mode exposes CPU, memory, conversation preview, background-session management, and kill actions. Masonry layout places each next card in the shortest column and computes columns from available width, minimum width 360, and spacing 14.
+
+### Rules
+Shown only when `showsProcessActions` is true:
+- Background sessions button/panel, if `!store.backgroundSessions.isEmpty`
+- Kill idle sessions button, if `store.idleCount() > 0`
+- Kill stale sessions button, if `store.staleCount() > 0`
+- Kill-all-by-agent-type buttons for:
+  - `claude`
+  - `codex`
+  - `opencode`
+
+Exact hover descriptions:
+- For `.processBased`:
+  - `Processes reads live terminal processes and shows CPU, memory, and conversation previews. VSmux reads live sessions directly from VSmux and focuses the exact session in VS Code.`
+- For `.vsmuxSessions`:
+  - `VSmux reads live sessions directly from VSmux and focuses the exact session in VS Code. Processes reads terminal processes instead and shows CPU, memory, and conversation previews.`
+
+### Examples
+Picker example: labelsHidden segmented control bound to store.sessionDetailsRetrievalMode and using Text(mode.displayName). Session card examples include isNewSession returning false for VSmux sessions, previewText returning "No messages sent yet" for new process sessions, metricsLine rendering only time-ago plus optional thread prefix for VSmux sessions, and process sessions rendering PID, CPU percent, memory, time-ago, plus active subagent count.
 
 ## Facts
-- **dashboard_session_source_picker**: The dashboard uses a segmented picker with width 260 for session source selection. [project]
-- **dashboard_process_only_actions**: Background, kill idle, kill stale, and per-agent kill actions are shown only in process mode. [project]
-- **vsmux_new_session_behavior**: VSmux session cards never count as new sessions. [project]
-- **vsmux_full_message_popover**: VSmux full message popovers are disabled. [project]
+- **session_source_picker_label**: Session source picker hides its visible label to avoid header layout breakage. [project]
+- **default_session_details_mode**: processBased remains the default persisted mode. [project]
+- **session_source_display_labels**: Segmented control uses display-only labels Processes and VSmux. [project]
+- **process_actions_visibility**: Process-only dashboard actions are shown only when store.sessionDetailsRetrievalMode == .processBased. [convention]
+- **vsmux_full_message_popover**: VSmux sessions do not show a full message popover. [project]
+- **message_popover_timing**: Message popover show delay is 0.65 seconds and hide delay is 0.16 seconds. [project]
+- **masonry_layout_defaults**: Masonry layout minimum column width is 360 with spacing 14. [project]
+- **project_group_kill_all_visibility**: Project group cards show kill-all controls only in processBased mode. [project]
+- **session_file_path_behavior**: Session file path is shown when store.showSessionFilePath is enabled and tapping copies the path to NSPasteboard. [project]
