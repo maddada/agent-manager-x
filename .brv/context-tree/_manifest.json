@@ -1,0 +1,49 @@
+{
+  "active_context": [
+    {
+      "order": 3,
+      "path": "_index.md",
+      "tokens": 1301,
+      "type": "summary"
+    },
+    {
+      "importance": 50,
+      "path": "architecture/context.md",
+      "tokens": 166,
+      "type": "context"
+    },
+    {
+      "importance": 50,
+      "path": "architecture/session_management/context.md",
+      "tokens": 147,
+      "type": "context"
+    },
+    {
+      "importance": 50,
+      "path": "architecture/session_management/dashboard_session_source.md",
+      "tokens": 645,
+      "type": "context"
+    },
+    {
+      "importance": 50,
+      "path": "architecture/session_management/session_models.md",
+      "tokens": 533,
+      "type": "context"
+    },
+    {
+      "importance": 50,
+      "path": "architecture/session_management/vsmux_live_session_mode.md",
+      "tokens": 1279,
+      "type": "context"
+    }
+  ],
+  "generated_at": "2026-04-06T12:31:09.378Z",
+  "lane_tokens": {
+    "contexts": 2770,
+    "stubs": 0,
+    "summaries": 1301
+  },
+  "source_fingerprint": "5074114d88d7ec93b69832b78b39289047f403e33cbe6769f389968dd2bda748",
+  "total_tokens": 4071,
+  "version": 1
+}

@@ -16,6 +16,7 @@ final class SettingsStore {
     static let defaultTerminalValue: DefaultTerminal = .terminal
     static let defaultCardClickAction: CardClickAction = .editor
     static let defaultDisplayMode: DisplayMode = .masonry
+    static let defaultSessionDetailsRetrievalMode: SessionDetailsRetrievalMode = .processBased
     static let defaultUseSlowerCompatibleProjectSwitching = false
     static let defaultTheme: ThemePreference = .dark
     static let defaultBackgroundImage = "https://images.pexels.com/photos/28428592/pexels-photo-28428592.jpeg"
@@ -114,6 +115,16 @@ final class SettingsStore {
     var displayMode: DisplayMode {
         get { enumValue(forKey: SettingsKeys.displayMode, default: Self.defaultDisplayMode) }
         set { defaults.set(newValue.rawValue, forKey: SettingsKeys.displayMode) }
+    }
+
+    var sessionDetailsRetrievalMode: SessionDetailsRetrievalMode {
+        get {
+            enumValue(
+                forKey: SettingsKeys.sessionDetailsRetrievalMode,
+                default: Self.defaultSessionDetailsRetrievalMode
+            )
+        }
+        set { defaults.set(newValue.rawValue, forKey: SettingsKeys.sessionDetailsRetrievalMode) }
     }
 
     var useSlowerCompatibleProjectSwitching: Bool {

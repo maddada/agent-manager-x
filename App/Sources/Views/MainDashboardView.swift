@@ -75,6 +75,9 @@ private struct AppHeaderView: View {
     @State private var showBackgroundPanel = false
 
     private let agentTypeOrder: [AgentType] = [.claude, .codex, .opencode]
+    private var showsProcessActions: Bool {
+        store.sessionDetailsRetrievalMode == .processBased
+    }
 
     var body: some View {
         HStack(spacing: 12) {
@@ -113,7 +116,21 @@ private struct AppHeaderView: View {
             .layoutPriority(0)
 
             HStack(spacing: 8) {
-                if !store.backgroundSessions.isEmpty {
+                Picker(
+                    "Session Source",
+                    selection: Binding(
+                        get: { store.sessionDetailsRetrievalMode },
+                        set: { store.updateSessionDetailsRetrievalMode($0) }
+                    )
+                ) {
+                    ForEach(SessionDetailsRetrievalMode.allCases, id: \.rawValue) { mode in
+                        Text(mode.rawValue).tag(mode)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .frame(width: 260)
+
+                if showsProcessActions && !store.backgroundSessions.isEmpty {
                     Button {
                         showBackgroundPanel.toggle()
                     } label: {
@@ -134,7 +151,7 @@ private struct AppHeaderView: View {
                     }
                 }
 
-                if store.idleCount() > 0 {
+                if showsProcessActions && store.idleCount() > 0 {
                     Button {
                         store.killIdleSessions()
                     } label: {
@@ -149,7 +166,7 @@ private struct AppHeaderView: View {
                     .hoverPopover("Kill idle sessions")
                 }
 
-                if store.staleCount() > 0 {
+                if showsProcessActions && store.staleCount() > 0 {
                     Button {
                         store.killStaleSessions()
                     } label: {
@@ -164,7 +181,7 @@ private struct AppHeaderView: View {
                     .hoverPopover("Kill stale sessions")
                 }
 
-                ForEach(agentTypeOrder, id: \.rawValue) { type in
+                ForEach(showsProcessActions ? agentTypeOrder : [], id: \.rawValue) { type in
                     let count = store.agentCounts[type, default: 0]
                     if count > 0 {
                         Button {
@@ -500,6 +517,7 @@ private struct ProjectGroupCardView: View {
                 hasDiffStats: hasDiffStats,
                 shortcutNumber: shortcutNumber,
                 actionsOnNewRow: !compactSessions,
+                showsKillAll: store.sessionDetailsRetrievalMode == .processBased,
                 onKillAll: {
                     store.killProjectSessions(group)
                 },
@@ -596,6 +614,7 @@ private struct ProjectGroupHeaderView: View {
     let hasDiffStats: Bool
     let shortcutNumber: Int?
     let actionsOnNewRow: Bool
+    let showsKillAll: Bool
     let onKillAll: () -> Void
     let onOpenProject: () -> Void
     let onOpenInTerminal: () -> Void
@@ -691,25 +710,31 @@ private struct ProjectGroupHeaderView: View {
         }
         .padding(12)
         .overlay(alignment: .topLeading) {
-            Button(role: .destructive, action: onKillAll) {
-                Image(systemName: "xmark")
-                    .font(.system(size: 10, weight: .bold))
-                    .frame(width: 18, height: 18)
-                    .background(Circle().fill(Color.red))
-                    .foregroundStyle(.white)
+            if showsKillAll {
+                Button(role: .destructive, action: onKillAll) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 10, weight: .bold))
+                        .frame(width: 18, height: 18)
+                        .background(Circle().fill(Color.red))
+                        .foregroundStyle(.white)
+                }
+                .buttonStyle(.plain)
+                .focusable(false)
+                .hoverPointerCursor()
+                .hoverPopover("Kill all sessions in project")
+                .offset(x: -8, y: -8)
+                .opacity(isHoveringHeader ? 1 : 0)
+                .allowsHitTesting(isHoveringHeader)
             }
-            .buttonStyle(.plain)
-            .focusable(false)
-            .hoverPointerCursor()
-            .hoverPopover("Kill all sessions in project")
-            .offset(x: -8, y: -8)
-            .opacity(isHoveringHeader ? 1 : 0)
-            .allowsHitTesting(isHoveringHeader)
         }
         .onHover { hovering in
             isHoveringHeader = hovering
         }
-        .onMiddleClick(perform: onKillAll)
+        .onMiddleClick(perform: {
+            if showsKillAll {
+                onKillAll()
+            }
+        })
     }
 
     private var projectActionButtons: some View {
@@ -781,7 +806,14 @@ private struct SessionCardView: View {
         store.customURL(for: session.id)
     }
 
+    private var showsProcessActions: Bool {
+        session.detailsSource == .processBased
+    }
+
     private var isNewSession: Bool {
+        if session.detailsSource == .vsmuxSessions {
+            return false
+        }
         let hasMessage = session.lastMessage.map { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty } ?? false
         return !hasMessage && (session.status == .waiting || session.status == .idle)
     }
@@ -811,6 +843,10 @@ private struct SessionCardView: View {
     }
 
     private var fullMessage: String? {
+        if session.detailsSource == .vsmuxSessions {
+            return nil
+        }
+
         guard let message = session.lastMessage else {
             return nil
         }
@@ -852,6 +888,15 @@ private struct SessionCardView: View {
     }
 
     private var metricsLine: String {
+        if session.detailsSource == .vsmuxSessions {
+            var parts = [formatTimeAgo(session.lastActivityAt)]
+            if let threadID = session.vsmuxThreadID,
+               !threadID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                parts.append("Thread \(String(threadID.prefix(8)))")
+            }
+            return parts.joined(separator: " • ")
+        }
+
         let timeAgo = formatTimeAgo(session.lastActivityAt)
         var parts = [
             "PID \(session.pid)",
@@ -983,21 +1028,23 @@ private struct SessionCardView: View {
                     .strokeBorder(statusStyle.cardBorder, lineWidth: 1)
             )
 
-            Button(role: .destructive) {
-                store.killSession(session)
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 10, weight: .bold))
-                    .frame(width: 18, height: 18)
-                    .background(Circle().fill(Color.red))
-                    .foregroundStyle(.white)
+            if showsProcessActions {
+                Button(role: .destructive) {
+                    store.killSession(session)
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 10, weight: .bold))
+                        .frame(width: 18, height: 18)
+                        .background(Circle().fill(Color.red))
+                        .foregroundStyle(.white)
+                }
+                .buttonStyle(.plain)
+                .focusable(false)
+                .offset(x: -8, y: -8)
+                .opacity(isHoveringCard ? 1 : 0)
+                .allowsHitTesting(isHoveringCard)
+                .hoverPopover("Kill session")
             }
-            .buttonStyle(.plain)
-            .focusable(false)
-            .offset(x: -8, y: -8)
-            .opacity(isHoveringCard ? 1 : 0)
-            .allowsHitTesting(isHoveringCard)
-            .hoverPopover("Kill session")
 
             if !customURL.isEmpty {
                 Button {
@@ -1029,7 +1076,9 @@ private struct SessionCardView: View {
             store.openSession(session)
         }
         .onMiddleClick(perform: {
-            store.killSession(session)
+            if showsProcessActions {
+                store.killSession(session)
+            }
         })
         .zIndex(isMessagePopoverPresented ? 20_000 : 0)
         .onDisappear {
@@ -1081,10 +1130,12 @@ private struct SessionCardView: View {
                 }
             }
 
-            Divider()
+            if showsProcessActions {
+                Divider()
 
-            Button("Kill Session", role: .destructive) {
-                store.killSession(session)
+                Button("Kill Session", role: .destructive) {
+                    store.killSession(session)
+                }
             }
         }
         .sheet(isPresented: $renameDialogVisible) {
@@ -1135,7 +1186,9 @@ private struct AgentMarkerView: View {
         switch agentType {
         case .claude: return "CL"
         case .codex: return "CX"
+        case .gemini: return "GM"
         case .opencode: return "OC"
+        case .t3: return "T3"
         }
     }
 

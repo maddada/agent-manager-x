@@ -433,7 +433,9 @@ private struct AgentTypeBadge: View {
         switch agentType {
         case .claude: return "CL"
         case .codex: return "CX"
+        case .gemini: return "GM"
         case .opencode: return "OC"
+        case .t3: return "T3"
         }
     }
 

@@ -75,6 +75,8 @@ final class SessionDetectionService {
         case .claude: return 0
         case .codex: return 1
         case .opencode: return 2
+        case .gemini: return 3
+        case .t3: return 4
         }
     }
 }

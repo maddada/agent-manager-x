@@ -16,7 +16,10 @@ targets:
       - path: App/Resources
         buildPhase: resources
         excludes:
-          - native-mini-viewer/MiniViewer.swift
+          - native-mini-viewer/**
+      - path: App/Resources/native-mini-viewer
+        buildPhase: resources
+        type: folder
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.madda.agentmanagerx

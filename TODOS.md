@@ -4,14 +4,14 @@ These todos are based on profiling the live app while it was showing up in macOS
 
 ## Highest Priority
 
-### Share one session snapshot between the main app and mini viewer
+### [Done] Share one session snapshot between the main app and mini viewer
 
 Details:
 - The main app and mini viewer currently run separate refresh loops and both call `SessionDetectionService.getAllSessions()`.
 - This duplicates the most expensive work in the app, including process scanning, `lsof` calls, and session-file parsing.
 - Best direction: have one canonical refresh pipeline produce a shared session snapshot, then let both the main UI and mini viewer consume that result.
 
-### Cache per-PID process metadata to avoid repeated `lsof` work
+### [Done] Cache per-PID process metadata to avoid repeated `lsof` work
 
 Details:
 - `workingDirectory(pid:)` and `newestOpenFile(pid:...)` are expensive because they shell out to `lsof`.
@@ -19,14 +19,14 @@ Details:
 - Best direction: cache `cwd` and `activeSessionFile` by PID with a short TTL, and invalidate when the process disappears or its elapsed/start info changes.
 - This should reduce both CPU and subprocess churn significantly.
 
-### Cache parsed session files by path and modification date
+### [Done] Cache parsed session files by path and modification date
 
 Details:
 - Claude, Codex, and OpenCode repeatedly decode the same session files even when the file contents have not changed.
 - Best direction: add a parsed-session cache keyed by file path plus modification date, and reuse the decoded result until the file actually changes.
 - This is especially important for large Codex JSONL files.
 
-### Make Codex session discovery cheaper
+### [Done] Make Codex session discovery cheaper
 
 Details:
 - Codex fallback scanning can recurse through many directories and parse many candidate files per sweep.
@@ -39,7 +39,7 @@ Details:
 
 ## Medium Priority
 
-### Only compute git diff stats when needed
+### [Done] Only compute git diff stats when needed
 
 Details:
 - The mini viewer computes diff stats per visible project, and each calculation shells out to `git diff --numstat HEAD`.
@@ -50,7 +50,7 @@ Details:
   - increase the diff cache TTL
   - refresh diff stats on a slower cadence than session polling
 
-### Stop prewarming the mini viewer when it is hidden
+### [Done] Stop prewarming the mini viewer when it is hidden
 
 Details:
 - The app currently starts the native mini viewer helper even when the viewer is not shown yet, to make toggling feel faster.

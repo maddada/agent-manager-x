@@ -54,6 +54,10 @@ final class HistoryService {
             )?.conversation
         case .opencode:
             parsed = nil
+        case .gemini:
+            parsed = nil
+        case .t3:
+            parsed = nil
         }
 
         guard let parsed else { return nil }

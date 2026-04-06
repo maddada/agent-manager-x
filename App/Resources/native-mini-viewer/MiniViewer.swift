@@ -54,10 +54,17 @@ private enum SessionStatus: String, Codable {
     case stale
 }
 
+private enum SessionDetailsSource: String, Codable {
+    case processBased
+    case vsmuxSessions
+}
+
 private enum AgentType: String, Codable, Hashable {
     case claude
     case codex
+    case gemini
     case opencode
+    case t3
 }
 
 private struct MiniViewerSession: Codable, Identifiable {
@@ -72,6 +79,10 @@ private struct MiniViewerSession: Codable, Identifiable {
     let cpuUsage: Float
     let memoryBytes: UInt64
     let activeSubagentCount: Int
+    let detailsSource: SessionDetailsSource
+    let sessionID: String
+    let vsmuxThreadID: String?
+    let vsmuxWorkspaceID: String?
 }
 
 private struct MiniViewerProject: Codable, Identifiable {
@@ -101,9 +112,12 @@ private struct MiniViewerVisibilityCommand: Codable {
 
 private struct MiniViewerAction: Encodable {
     let action: String
+    let detailsSource: SessionDetailsSource
     let pid: UInt32
     let projectPath: String
     let projectName: String
+    let sessionID: String
+    let vsmuxWorkspaceID: String?
 }
 
 private struct BottomRoundedRectangle: Shape {
@@ -467,6 +481,14 @@ private struct SessionRowView: View {
     }
 
     private var statLine: String {
+        if session.detailsSource == .vsmuxSessions {
+            if let threadID = session.vsmuxThreadID,
+               !threadID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                return "thread \(String(threadID.prefix(8)))"
+            }
+            return "live via VSmux"
+        }
+
         let memoryMB = Double(session.memoryBytes) / (1024.0 * 1024.0)
         let memoryText = memoryMB >= 1024 ? String(format: "%.1fG", memoryMB / 1024.0) : "\(Int(memoryMB.rounded()))M"
         return "\(Int(session.cpuUsage.rounded()))%  \(memoryText)"
@@ -1005,9 +1027,12 @@ final class MiniViewerAppDelegate: NSObject, NSApplicationDelegate {
     private func sendAction(_ actionName: String, session: MiniViewerSession) {
         let action = MiniViewerAction(
             action: actionName,
+            detailsSource: session.detailsSource,
             pid: session.pid,
             projectPath: session.projectPath,
-            projectName: session.projectName
+            projectName: session.projectName,
+            sessionID: session.sessionID,
+            vsmuxWorkspaceID: session.vsmuxWorkspaceID
         )
 
         guard let data = try? JSONEncoder().encode(action) else {

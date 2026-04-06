@@ -25,12 +25,14 @@ enum MiniViewerControllerError: Error, LocalizedError {
 }
 
 final class MiniViewerController {
+    private static let maxProjectsWithDiffStats = 6
     private let sessionDetectionService: SessionDetectionService
     private let gitDiffStatsService: GitDiffStatsService
     private let coreActionsService: CoreActionsService
     private let settings: SettingsStore
     private let fileManager: FileManager
     private var onOpenMainWindow: (() -> Void)?
+    private var onOpenVSmuxSession: ((String, String, String, String) -> Void)?
 
     private let queue = DispatchQueue(label: "MiniViewerController.queue", qos: .userInteractive)
     private let payloadQueue = DispatchQueue(label: "MiniViewerController.payloadQueue", qos: .utility)
@@ -117,6 +119,12 @@ final class MiniViewerController {
     func setOpenMainWindowHandler(_ handler: @escaping () -> Void) {
         queue.async {
             self.onOpenMainWindow = handler
+        }
+    }
+
+    func setVSmuxSessionOpenHandler(_ handler: @escaping (String, String, String, String) -> Void) {
+        queue.async {
+            self.onOpenVSmuxSession = handler
         }
     }
 
@@ -419,7 +427,8 @@ final class MiniViewerController {
             projects[projectIndex].sessions.append(miniSession)
         }
 
-        for index in projects.indices {
+        let diffProjectLimit = min(projects.count, Self.maxProjectsWithDiffStats)
+        for index in 0..<diffProjectLimit {
             let stats = gitDiffStats(for: projects[index].projectPath)
             projects[index].diffAdditions = stats.additions
             projects[index].diffDeletions = stats.deletions
@@ -477,6 +486,15 @@ final class MiniViewerController {
     private func handleMiniViewerActionLocked(_ action: MiniViewerAction) {
         switch action.action {
         case "focusSession":
+            if action.detailsSource == .vsmuxSessions,
+               let workspaceId = action.vsmuxWorkspaceID {
+                let handler = onOpenVSmuxSession
+                DispatchQueue.main.async {
+                    handler?(workspaceId, action.sessionID, action.projectPath, action.projectName)
+                }
+                return
+            }
+
             if openInPreferredEditor(projectPath: action.projectPath, projectName: action.projectName) {
                 return
             }
@@ -487,6 +505,9 @@ final class MiniViewerController {
 
             try? coreActionsService.openInTerminal(path: action.projectPath, terminal: .terminal)
         case "endSession":
+            if action.detailsSource == .vsmuxSessions {
+                return
+            }
             try? coreActionsService.killSession(pid: Int(action.pid))
         case "openMainWindow":
             let openMainWindow = onOpenMainWindow
@@ -512,8 +533,19 @@ final class MiniViewerController {
     }
 
     private func miniViewerSourcePathLocked() throws -> URL {
-        if let bundled = Bundle.main.url(forResource: "MiniViewer", withExtension: "swift", subdirectory: "native-mini-viewer"),
-           fileManager.fileExists(atPath: bundled.path) {
+        let bundledCandidates: [URL?] = [
+            Bundle.main.url(forResource: "MiniViewer", withExtension: "swift", subdirectory: "native-mini-viewer"),
+            Bundle.main.url(forResource: "MiniViewer", withExtension: "swift"),
+            Bundle.main.resourceURL?.appendingPathComponent("native-mini-viewer", isDirectory: true)
+                .appendingPathComponent("MiniViewer.swift"),
+            Bundle.main.resourceURL?.appendingPathComponent("MiniViewer.swift"),
+        ]
+
+        if let bundled = bundledCandidates
+            .compactMap({ $0 })
+            .first(where: { candidate in
+                fileManager.fileExists(atPath: candidate.path)
+            }) {
             return bundled
         }
 
@@ -539,12 +571,26 @@ final class MiniViewerController {
     }
 
     private func miniViewerIconDirectoryPathLocked() throws -> URL {
+        let bundledCandidates: [URL?] = [
+            Bundle.main.resourceURL?.appendingPathComponent("native-mini-viewer", isDirectory: true)
+                .appendingPathComponent("icons", isDirectory: true),
+            Bundle.main.resourceURL,
+        ]
+
+        if let bundledDirectory = bundledCandidates
+            .compactMap({ $0 })
+            .first(where: { candidate in
+                miniViewerIconsExist(in: candidate)
+            }) {
+            return bundledDirectory
+        }
+
         let sourcePath = try miniViewerSourcePathLocked()
         let iconDirectory = sourcePath
             .deletingLastPathComponent()
             .appendingPathComponent("icons", isDirectory: true)
 
-        if fileManager.fileExists(atPath: iconDirectory.path) {
+        if miniViewerIconsExist(in: iconDirectory) {
             return iconDirectory
         }
 
@@ -611,10 +657,17 @@ final class MiniViewerController {
         try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
         return directory
     }
+
+    private func miniViewerIconsExist(in directory: URL) -> Bool {
+        let requiredIcons = ["claude.svg", "codex.svg", "opencode.svg"]
+        return requiredIcons.allSatisfy { fileName in
+            fileManager.fileExists(atPath: directory.appendingPathComponent(fileName).path)
+        }
+    }
 }
 
 private struct CachedGitDiffStats {
-    static let ttl: TimeInterval = 12
+    static let ttl: TimeInterval = 60
 
     let additions: Int
     let deletions: Int
@@ -633,6 +686,10 @@ private struct MiniViewerSessionPayload: Codable {
     let cpuUsage: Float
     let memoryBytes: UInt64
     let activeSubagentCount: Int
+    let detailsSource: SessionDetailsSource
+    let sessionID: String
+    let vsmuxThreadID: String?
+    let vsmuxWorkspaceID: String?
 
     init(from session: Session) {
         id = session.id
@@ -646,6 +703,10 @@ private struct MiniViewerSessionPayload: Codable {
         cpuUsage = Float(session.cpuUsage)
         memoryBytes = UInt64(max(0, session.memoryBytes))
         activeSubagentCount = session.activeSubagentCount
+        detailsSource = session.detailsSource
+        sessionID = session.id
+        vsmuxThreadID = session.vsmuxThreadID
+        vsmuxWorkspaceID = session.vsmuxWorkspaceID
     }
 }
 
@@ -667,9 +728,12 @@ private struct MiniViewerPayload: Codable {
 
 private struct MiniViewerAction: Codable {
     let action: String
+    let detailsSource: SessionDetailsSource
     let pid: UInt32
     let projectPath: String
     let projectName: String
+    let sessionID: String
+    let vsmuxWorkspaceID: String?
 }
 
 private struct MiniViewerVisibilityCommand: Codable {

@@ -22,6 +22,11 @@ enum DefaultTerminal: String, Codable, CaseIterable {
     case custom
 }
 
+enum SessionDetailsRetrievalMode: String, Codable, CaseIterable {
+    case processBased = "Process based"
+    case vsmuxSessions = "VSmux sessions"
+}
+
 enum UIElementSize: String, Codable, CaseIterable {
     case small
     case medium

@@ -24,6 +24,7 @@ final class AppStore: ObservableObject {
     @Published var settingsConfirmation: String?
 
     @Published var displayMode: DisplayMode
+    @Published var sessionDetailsRetrievalMode: SessionDetailsRetrievalMode
     @Published var theme: ThemePreference
     @Published var backgroundImage: String
     @Published var overlayOpacity: Int
@@ -56,6 +57,7 @@ final class AppStore: ObservableObject {
     private let hotkeyManager: GlobalHotkeyManager
     private let miniViewerController: MiniViewerController
     private let notificationService: NotificationService
+    private let vsmuxSessionBroker: VSmuxSessionBroker
 
     private var pollTimer: Timer?
     private var started = false
@@ -78,7 +80,8 @@ final class AppStore: ObservableObject {
         menuBarService: MenuBarService? = nil,
         hotkeyManager: GlobalHotkeyManager = GlobalHotkeyManager(),
         miniViewerController: MiniViewerController? = nil,
-        notificationService: NotificationService = NotificationService()
+        notificationService: NotificationService = NotificationService(),
+        vsmuxSessionBroker: VSmuxSessionBroker = VSmuxSessionBroker()
     ) {
         self.settings = settings
         self.sessionDetectionService = sessionDetectionService
@@ -97,8 +100,10 @@ final class AppStore: ObservableObject {
         )
 
         self.notificationService = notificationService
+        self.vsmuxSessionBroker = vsmuxSessionBroker
 
         displayMode = settings.displayMode
+        sessionDetailsRetrievalMode = settings.sessionDetailsRetrievalMode
         theme = settings.theme
         backgroundImage = settings.backgroundImage
         overlayOpacity = settings.overlayOpacity
@@ -122,6 +127,21 @@ final class AppStore: ObservableObject {
         self.miniViewerController.setOpenMainWindowHandler { [weak self] in
             self?.showAndFocusMainWindow()
         }
+        self.miniViewerController.setVSmuxSessionOpenHandler { [weak self] workspaceId, sessionId, projectPath, projectName in
+            Task { @MainActor [weak self] in
+                self?.openVSmuxSession(
+                    workspaceId: workspaceId,
+                    sessionId: sessionId,
+                    projectPath: projectPath,
+                    projectName: projectName
+                )
+            }
+        }
+        self.vsmuxSessionBroker.onWorkspacesChanged = { [weak self] snapshots in
+            Task { @MainActor [weak self] in
+                self?.applyVSmuxWorkspaces(snapshots)
+            }
+        }
     }
 
     func start() {
@@ -134,13 +154,11 @@ final class AppStore: ObservableObject {
         configureHotkeys()
         applyMiniViewerSettings()
         refreshNotificationState()
+        startActiveSessionSource()
         refresh(showInitialLoading: true)
-        startPolling()
 
         if miniViewerShowOnStart {
             showMiniViewer()
-        } else {
-            prewarmMiniViewerForFastToggle()
         }
     }
 
@@ -152,6 +170,7 @@ final class AppStore: ObservableObject {
         hotkeyManager.setCallbacks(onAppToggle: nil, onMiniViewerToggle: nil)
         menuBarService.teardown()
         miniViewerController.shutdown()
+        vsmuxSessionBroker.stop()
         started = false
     }
 
@@ -174,6 +193,14 @@ final class AppStore: ObservableObject {
     }
 
     func refresh(showInitialLoading: Bool = false, fromTimer: Bool = false) {
+        if sessionDetailsRetrievalMode == .vsmuxSessions {
+            if showInitialLoading {
+                isLoading = true
+            }
+            applyVSmuxWorkspaces(vsmuxSessionBroker.currentWorkspaces())
+            return
+        }
+
         if showInitialLoading {
             isLoading = true
         }
@@ -192,6 +219,11 @@ final class AppStore: ObservableObject {
 
             DispatchQueue.main.async { [weak self] in
                 guard let self else {
+                    return
+                }
+                guard self.sessionDetailsRetrievalMode == .processBased else {
+                    self.isRefreshInFlight = false
+                    self.hasPendingRefresh = false
                     return
                 }
                 self.apply(response: response)
@@ -228,6 +260,9 @@ final class AppStore: ObservableObject {
     }
 
     func killBackgroundSession(_ session: Session) {
+        guard session.detailsSource == .processBased else {
+            return
+        }
         do {
             try coreActionsService.killSession(pid: session.pid)
         } catch {
@@ -245,6 +280,9 @@ final class AppStore: ObservableObject {
     }
 
     func killSession(_ session: Session) {
+        guard session.detailsSource == .processBased else {
+            return
+        }
         do {
             try coreActionsService.killSession(pid: session.pid)
         } catch {
@@ -254,6 +292,17 @@ final class AppStore: ObservableObject {
     }
 
     func focusSession(_ session: Session) {
+        if session.detailsSource == .vsmuxSessions,
+           let workspaceId = session.vsmuxWorkspaceID {
+            openVSmuxSession(
+                workspaceId: workspaceId,
+                sessionId: session.id,
+                projectPath: session.projectPath,
+                projectName: session.projectName
+            )
+            return
+        }
+
         let focused = coreActionsService.focusSession(pid: session.pid, projectPath: session.projectPath)
         if !focused {
             do {
@@ -265,6 +314,17 @@ final class AppStore: ObservableObject {
     }
 
     func openSession(_ session: Session) {
+        if session.detailsSource == .vsmuxSessions,
+           let workspaceId = session.vsmuxWorkspaceID {
+            openVSmuxSession(
+                workspaceId: workspaceId,
+                sessionId: session.id,
+                projectPath: session.projectPath,
+                projectName: session.projectName
+            )
+            return
+        }
+
         openProject(path: session.projectPath, projectName: session.projectName)
     }
 
@@ -411,6 +471,18 @@ final class AppStore: ObservableObject {
     func updateDisplayMode(_ mode: DisplayMode) {
         displayMode = mode
         settings.displayMode = mode
+    }
+
+    func updateSessionDetailsRetrievalMode(_ mode: SessionDetailsRetrievalMode) {
+        guard sessionDetailsRetrievalMode != mode else {
+            return
+        }
+
+        sessionDetailsRetrievalMode = mode
+        settings.sessionDetailsRetrievalMode = mode
+        isLoading = true
+        startActiveSessionSource()
+        refresh(showInitialLoading: true)
     }
 
     func updateTheme(_ value: ThemePreference) {
@@ -671,6 +743,7 @@ final class AppStore: ObservableObject {
     func showAndFocusMainWindow() {
         NSApplication.shared.activate(ignoringOtherApps: true)
         resolvedMainWindow()?.makeKeyAndOrderFront(nil)
+        updateGitDiffStats(for: sessions)
     }
 
     func toggleMiniViewer() {
@@ -684,14 +757,6 @@ final class AppStore: ObservableObject {
     func showMiniViewer() {
         do {
             try miniViewerController.show()
-        } catch {
-            setActionError(error)
-        }
-    }
-
-    private func prewarmMiniViewerForFastToggle() {
-        do {
-            try miniViewerController.prepareForFastToggle()
         } catch {
             setActionError(error)
         }
@@ -852,10 +917,120 @@ final class AppStore: ObservableObject {
         menuBarService.updateTitle(total: totalCount, waiting: waitingCount)
     }
 
+    private func startActiveSessionSource() {
+        pollTimer?.invalidate()
+        pollTimer = nil
+
+        if sessionDetailsRetrievalMode == .processBased {
+            vsmuxSessionBroker.stop()
+            startPolling()
+            return
+        }
+
+        vsmuxSessionBroker.start()
+    }
+
+    private func applyVSmuxWorkspaces(_ workspaces: [VSmuxWorkspaceSnapshot]) {
+        guard sessionDetailsRetrievalMode == .vsmuxSessions else {
+            return
+        }
+
+        let response = makeVSmuxSessionsResponse(from: workspaces)
+        apply(response: response)
+        isLoading = false
+        errorMessage = nil
+    }
+
+    private func makeVSmuxSessionsResponse(from workspaces: [VSmuxWorkspaceSnapshot]) -> SessionsResponse {
+        let sessions = workspaces
+            .flatMap { workspace in
+                workspace.sessions.map { session in
+                    Session(
+                        id: session.sessionId,
+                        agentType: mapVSmuxAgentType(session.agent),
+                        projectName: workspace.workspaceName,
+                        projectPath: workspace.workspacePath,
+                        gitBranch: nil,
+                        githubUrl: nil,
+                        status: mapVSmuxStatus(session.status),
+                        lastMessage: session.displayName,
+                        lastMessageRole: nil,
+                        lastActivityAt: session.lastActiveAt,
+                        pid: 0,
+                        cpuUsage: 0,
+                        memoryBytes: 0,
+                        activeSubagentCount: 0,
+                        isBackground: false,
+                        detailsSource: .vsmuxSessions,
+                        vsmuxWorkspaceID: workspace.workspaceId,
+                        vsmuxThreadID: session.threadId,
+                        sessionFilePath: nil
+                    )
+                }
+            }
+            .sorted(by: compareVSmuxSessions)
+
+        return SessionsResponse(
+            sessions: sessions,
+            backgroundSessions: [],
+            totalCount: sessions.count,
+            waitingCount: sessions.filter { $0.status == .waiting }.count
+        )
+    }
+
+    private func compareVSmuxSessions(lhs: Session, rhs: Session) -> Bool {
+        let lhsPriority = orderingPriority(for: lhs.status)
+        let rhsPriority = orderingPriority(for: rhs.status)
+        if lhsPriority != rhsPriority {
+            return lhsPriority < rhsPriority
+        }
+
+        let lhsDate = SessionParsingSupport.parseISODate(lhs.lastActivityAt) ?? .distantPast
+        let rhsDate = SessionParsingSupport.parseISODate(rhs.lastActivityAt) ?? .distantPast
+        if lhsDate != rhsDate {
+            return lhsDate > rhsDate
+        }
+
+        if lhs.projectPath != rhs.projectPath {
+            return lhs.projectPath < rhs.projectPath
+        }
+
+        return lhs.id < rhs.id
+    }
+
+    private func mapVSmuxAgentType(_ rawAgent: String) -> AgentType {
+        switch rawAgent.lowercased() {
+        case "claude":
+            return .claude
+        case "codex":
+            return .codex
+        case "gemini":
+            return .gemini
+        case "t3":
+            return .t3
+        default:
+            return .opencode
+        }
+    }
+
+    private func mapVSmuxStatus(_ rawStatus: String) -> SessionStatus {
+        switch rawStatus.lowercased() {
+        case "working":
+            return .processing
+        case "attention":
+            return .waiting
+        default:
+            return .idle
+        }
+    }
+
     private func killSessions(_ sessionsToKill: [Session]) {
         var firstError: Error?
 
         for session in sessionsToKill {
+            guard session.detailsSource == .processBased else {
+                continue
+            }
             do {
                 try coreActionsService.killSession(pid: session.pid)
             } catch {
@@ -879,6 +1054,24 @@ final class AppStore: ObservableObject {
                 useSlowerCompatibleProjectSwitching: useSlowerCompatibleProjectSwitching,
                 projectName: projectName
             )
+        } catch {
+            setActionError(error)
+        }
+    }
+
+    private func openVSmuxSession(
+        workspaceId: String,
+        sessionId: String,
+        projectPath: String,
+        projectName: String
+    ) {
+        do {
+            try coreActionsService.openInEditor(
+                path: projectPath,
+                useSlowerCompatibleProjectSwitching: useSlowerCompatibleProjectSwitching,
+                projectName: projectName
+            )
+            vsmuxSessionBroker.requestFocus(workspaceId: workspaceId, sessionId: sessionId)
         } catch {
             setActionError(error)
         }
@@ -964,6 +1157,14 @@ final class AppStore: ObservableObject {
     }
 
     private func updateGitDiffStats(for foregroundSessions: [Session]) {
+        let shouldRefresh = settingsPresented ||
+            historyPresented ||
+            (resolvedMainWindow()?.isVisible ?? false)
+
+        guard shouldRefresh else {
+            return
+        }
+
         let projectPaths = Array(Set(foregroundSessions.map(\.projectPath))).sorted()
         let now = Date()
         let cacheSnapshot = gitDiffCache

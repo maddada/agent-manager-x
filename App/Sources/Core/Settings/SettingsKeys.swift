@@ -15,6 +15,7 @@ enum SettingsKeys {
     static let customTerminalCommand = "agent-manager-x-custom-terminal-command"
     static let cardClickAction = "agent-manager-x-click-action"
     static let displayMode = "agent-manager-x-display-mode"
+    static let sessionDetailsRetrievalMode = "agent-manager-x-session-details-retrieval-mode"
     static let useSlowerCompatibleProjectSwitching = "agent-manager-x-slower-compatible-project-switching"
     static let legacyExperimentalVSCodeSessionOpening = "agent-manager-x-expiremental-vs-code-session-opening"
     static let theme = "agent-manager-x-theme"

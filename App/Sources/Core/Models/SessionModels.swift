@@ -3,7 +3,14 @@ import Foundation
 enum AgentType: String, Codable, CaseIterable {
     case claude
     case codex
+    case gemini
     case opencode
+    case t3
+}
+
+enum SessionDetailsSource: String, Codable, CaseIterable {
+    case processBased
+    case vsmuxSessions
 }
 
 enum SessionStatus: String, Codable, CaseIterable {
@@ -35,11 +42,14 @@ struct Session: Codable, Hashable, Identifiable {
     let memoryBytes: Int64
     let activeSubagentCount: Int
     let isBackground: Bool
+    var detailsSource: SessionDetailsSource = .processBased
+    var vsmuxWorkspaceID: String? = nil
+    var vsmuxThreadID: String? = nil
     var sessionFilePath: String? = nil
 
     /// Render-safe identity for UI lists where logical `id` may repeat across processes.
     var renderID: String {
-        "\(agentType.rawValue):\(pid):\(id)"
+        "\(detailsSource.rawValue):\(vsmuxWorkspaceID ?? "none"):\(agentType.rawValue):\(pid):\(id)"
     }
 }
 
