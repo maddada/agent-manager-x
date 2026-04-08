@@ -812,8 +812,12 @@ private struct SessionCardView: View {
         session.detailsSource == .processBased
     }
 
+    private var isVSmuxSession: Bool {
+        session.detailsSource == .vsmuxSessions
+    }
+
     private var isNewSession: Bool {
-        if session.detailsSource == .vsmuxSessions {
+        if isVSmuxSession {
             return false
         }
         let hasMessage = session.lastMessage.map { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty } ?? false
@@ -857,6 +861,19 @@ private struct SessionCardView: View {
         return trimmed.isEmpty ? nil : trimmed
     }
 
+    private var lastActivityLabel: String {
+        formatTimeAgo(session.lastActivityAt)
+    }
+
+    private var vsmuxMetricsLine: String? {
+        guard let threadID = session.vsmuxThreadID?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !threadID.isEmpty else {
+            return nil
+        }
+
+        return "Thread \(String(threadID.prefix(8)))"
+    }
+
     private var messagePopoverSize: CGSize {
         compact ? CGSize(width: 430, height: 400) : CGSize(width: 520, height: 460)
     }
@@ -889,17 +906,12 @@ private struct SessionCardView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.16, execute: task)
     }
 
-    private var metricsLine: String {
-        if session.detailsSource == .vsmuxSessions {
-            var parts = [formatTimeAgo(session.lastActivityAt)]
-            if let threadID = session.vsmuxThreadID,
-               !threadID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                parts.append("Thread \(String(threadID.prefix(8)))")
-            }
-            return parts.joined(separator: " • ")
+    private var metricsLine: String? {
+        if isVSmuxSession {
+            return vsmuxMetricsLine
         }
 
-        let timeAgo = formatTimeAgo(session.lastActivityAt)
+        let timeAgo = lastActivityLabel
         var parts = [
             "PID \(session.pid)",
             "\(session.cpuUsage.formatted(.number.precision(.fractionLength(0))))%",
@@ -963,6 +975,14 @@ private struct SessionCardView: View {
                         .foregroundStyle(statusStyle.accent)
                         .layoutPriority(2)
 
+                    if isVSmuxSession {
+                        Text(lastActivityLabel)
+                            .font(.caption2.weight(.medium))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .layoutPriority(1)
+                    }
+
                     if !customName.isEmpty {
                         Text(customName)
                             .font(.caption.weight(.semibold))
@@ -1010,12 +1030,14 @@ private struct SessionCardView: View {
                         messagePopoverContent
                     }
 
-                Text(metricsLine)
-                    .font(store.mainAppUIElementSize.sessionMetricsFont)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                    .padding(.top, metricsTopPadding)
+                if let metricsLine {
+                    Text(metricsLine)
+                        .font(store.mainAppUIElementSize.sessionMetricsFont)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .padding(.top, metricsTopPadding)
+                }
             }
             .padding(.top, cardTopPadding)
             .padding(.horizontal, 12)

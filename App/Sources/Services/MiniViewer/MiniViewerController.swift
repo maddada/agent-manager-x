@@ -33,6 +33,7 @@ final class MiniViewerController {
     private let fileManager: FileManager
     private var onOpenMainWindow: (() -> Void)?
     private var onOpenVSmuxSession: ((String, String, String, String) -> Void)?
+    private var onCloseVSmuxSession: ((String, String) -> Void)?
 
     private let queue = DispatchQueue(label: "MiniViewerController.queue", qos: .userInteractive)
     private let payloadQueue = DispatchQueue(label: "MiniViewerController.payloadQueue", qos: .utility)
@@ -150,6 +151,12 @@ final class MiniViewerController {
     func setVSmuxSessionOpenHandler(_ handler: @escaping (String, String, String, String) -> Void) {
         queue.async {
             self.onOpenVSmuxSession = handler
+        }
+    }
+
+    func setVSmuxSessionCloseHandler(_ handler: @escaping (String, String) -> Void) {
+        queue.async {
+            self.onCloseVSmuxSession = handler
         }
     }
 
@@ -472,6 +479,12 @@ final class MiniViewerController {
             projects[projectIndex].sessions.append(miniSession)
         }
 
+        for index in projects.indices {
+            projects[index].sessions.sort(by: areSessionsOrderedByMostRecentActivity)
+        }
+
+        projects.sort(by: areProjectsOrderedAlphabetically)
+
         let diffProjectLimit = min(projects.count, Self.maxProjectsWithDiffStats)
         for index in 0..<diffProjectLimit {
             let stats = gitDiffStats(for: projects[index].projectPath)
@@ -480,6 +493,35 @@ final class MiniViewerController {
         }
 
         return projects
+    }
+
+    private func areProjectsOrderedAlphabetically(
+        _ lhs: MiniViewerProjectPayload,
+        _ rhs: MiniViewerProjectPayload
+    ) -> Bool {
+        let projectNameComparison = lhs.projectName.localizedCaseInsensitiveCompare(rhs.projectName)
+        if projectNameComparison != .orderedSame {
+            return projectNameComparison == .orderedAscending
+        }
+
+        return lhs.projectPath.localizedStandardCompare(rhs.projectPath) == .orderedAscending
+    }
+
+    private func areSessionsOrderedByMostRecentActivity(
+        _ lhs: MiniViewerSessionPayload,
+        _ rhs: MiniViewerSessionPayload
+    ) -> Bool {
+        let lhsDate = SessionParsingSupport.parseISODate(lhs.lastActivityAt) ?? .distantPast
+        let rhsDate = SessionParsingSupport.parseISODate(rhs.lastActivityAt) ?? .distantPast
+        if lhsDate != rhsDate {
+            return lhsDate > rhsDate
+        }
+
+        if lhs.sessionID != rhs.sessionID {
+            return lhs.sessionID < rhs.sessionID
+        }
+
+        return lhs.pid < rhs.pid
     }
 
     private func miniViewerPriority(for status: SessionStatus) -> Int {
@@ -561,7 +603,12 @@ final class MiniViewerController {
 
             try? coreActionsService.openInTerminal(path: action.projectPath, terminal: .terminal)
         case "endSession":
-            if action.detailsSource == .vsmuxSessions {
+            if action.detailsSource == .vsmuxSessions,
+               let workspaceId = action.vsmuxWorkspaceID {
+                let handler = onCloseVSmuxSession
+                DispatchQueue.main.async {
+                    handler?(workspaceId, action.sessionID)
+                }
                 return
             }
             try? coreActionsService.killSession(pid: Int(action.pid))
@@ -748,7 +795,7 @@ private struct MiniViewerSessionPayload: Codable {
     let vsmuxWorkspaceID: String?
 
     init(from session: Session) {
-        id = session.id
+        id = "\(session.projectName)::\(session.id)"
         agentType = session.agentType
         projectName = session.projectName
         projectPath = session.projectPath

@@ -147,6 +147,11 @@ final class AppStore: ObservableObject {
                 )
             }
         }
+        self.miniViewerController.setVSmuxSessionCloseHandler { [weak self] workspaceId, sessionId in
+            Task { @MainActor [weak self] in
+                self?.vsmuxSessionBroker.requestClose(workspaceId: workspaceId, sessionId: sessionId)
+            }
+        }
         self.vsmuxSessionBroker.onWorkspacesChanged = { [weak self] snapshots in
             Task { @MainActor [weak self] in
                 self?.applyVSmuxWorkspaces(snapshots)
@@ -294,9 +299,12 @@ final class AppStore: ObservableObject {
     }
 
     func killSession(_ session: Session) {
-        guard session.detailsSource == .processBased else {
+        if session.detailsSource == .vsmuxSessions,
+           let workspaceId = session.vsmuxWorkspaceID {
+            vsmuxSessionBroker.requestClose(workspaceId: workspaceId, sessionId: session.id)
             return
         }
+
         do {
             try coreActionsService.killSession(pid: session.pid)
         } catch {

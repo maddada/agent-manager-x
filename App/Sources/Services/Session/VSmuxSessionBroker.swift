@@ -39,7 +39,7 @@ private struct VSmuxWorkspaceSnapshotEnvelope: Codable {
     let workspacePath: String
 }
 
-private struct VSmuxFocusSessionCommand: Codable {
+private struct VSmuxSessionCommand: Codable {
     let sessionId: String
     let type: String
     let workspaceId: String
@@ -127,6 +127,12 @@ final class VSmuxSessionBroker {
         }
     }
 
+    func requestClose(workspaceId: String, sessionId: String) {
+        queue.async {
+            self.sendSessionCommandLocked(type: "closeSession", workspaceId: workspaceId, sessionId: sessionId)
+        }
+    }
+
     private func stopLocked(notify: Bool) {
         listener?.stateUpdateHandler = nil
         listener?.newConnectionHandler = nil
@@ -210,27 +216,39 @@ final class VSmuxSessionBroker {
     }
 
     private func flushPendingFocusIfPossibleLocked(for workspaceId: String) {
-        guard let sessionId = pendingFocusSessionIDByWorkspaceID[workspaceId],
-              let snapshot = workspaceByID[workspaceId],
+        guard let sessionId = pendingFocusSessionIDByWorkspaceID[workspaceId] else {
+            return
+        }
+
+        guard sendSessionCommandLocked(type: "focusSession", workspaceId: workspaceId, sessionId: sessionId) else {
+            return
+        }
+
+        pendingFocusSessionIDByWorkspaceID[workspaceId] = nil
+    }
+
+    @discardableResult
+    private func sendSessionCommandLocked(type: String, workspaceId: String, sessionId: String) -> Bool {
+        guard let snapshot = workspaceByID[workspaceId],
               snapshot.sessions.contains(where: { $0.sessionId == sessionId }),
               let clientID = clientIDByWorkspaceID[workspaceId],
               let client = clientsByID[clientID] else {
-            return
+            return false
         }
 
-        let command = VSmuxFocusSessionCommand(
+        let command = VSmuxSessionCommand(
             sessionId: sessionId,
-            type: "focusSession",
+            type: type,
             workspaceId: workspaceId
         )
         guard let data = try? JSONEncoder().encode(command) else {
-            return
+            return false
         }
 
         let metadata = NWProtocolWebSocket.Metadata(opcode: .text)
-        let context = NWConnection.ContentContext(identifier: "focusSession", metadata: [metadata])
+        let context = NWConnection.ContentContext(identifier: type, metadata: [metadata])
         client.connection.send(content: data, contentContext: context, isComplete: true, completion: .idempotent)
-        pendingFocusSessionIDByWorkspaceID[workspaceId] = nil
+        return true
     }
 
     private func removeClientLocked(_ clientID: UUID) {

@@ -460,6 +460,10 @@ private struct SessionRowView: View {
         56 * chromeScale
     }
 
+    private var isVSmuxSession: Bool {
+        session.detailsSource == .vsmuxSessions
+    }
+
     private var isNewSession: Bool {
         fullMessage == nil && (session.status == .waiting || session.status == .idle)
     }
@@ -516,12 +520,20 @@ private struct SessionRowView: View {
     }
 
     private var statLine: String {
-        if session.detailsSource == .vsmuxSessions {
+        if isVSmuxSession {
+            let threadText: String?
             if let threadID = session.vsmuxThreadID,
                !threadID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                return "thread \(String(threadID.prefix(8)))"
+                threadText = "thread \(String(threadID.prefix(8)))"
+            } else {
+                threadText = nil
             }
-            return "live via VSmux"
+
+            if let threadText {
+                return "VSmux session • \(threadText)"
+            }
+
+            return "VSmux session"
         }
 
         let memoryMB = Double(session.memoryBytes) / (1024.0 * 1024.0)
@@ -660,6 +672,13 @@ private struct SessionRowView: View {
                             .padding(.horizontal, 6 * chromeScale)
                             .padding(.vertical, 2 * chromeScale)
                             .background(baseTint.opacity(0.18), in: Capsule())
+
+                        if isVSmuxSession {
+                            Text(lastActivityText)
+                                .miniViewerFont(size: 10, weight: .medium)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
                     }
 
                     HStack(spacing: 0) {
@@ -671,7 +690,9 @@ private struct SessionRowView: View {
                     }
 
                     HStack(spacing: 7 * chromeScale) {
-                        Text(lastActivityText)
+                        if !isVSmuxSession {
+                            Text(lastActivityText)
+                        }
                         Text(statLine)
                         if session.activeSubagentCount > 0 {
                             Text("+\(session.activeSubagentCount) sub")
