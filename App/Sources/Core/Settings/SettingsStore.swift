@@ -11,6 +11,7 @@ final class SettingsStore {
     static let defaultMiniViewerPinnedScreenTarget: MiniViewerScreenTarget = .primary
     static let defaultMiniViewerShowOnStart = true
     static let defaultMiniViewerShowRecentSessionsOnly = true
+    static let defaultMiniViewerKeepOneSessionPerProjectWhenFilteringRecent = true
     static let defaultMiniViewerRecentActivityWindowMinutes = 15
     static let defaultMiniViewerMaxSessions = 10
     static let defaultMainAppUIElementSize: UIElementSize = .medium
@@ -90,6 +91,16 @@ final class SettingsStore {
             return defaults.bool(forKey: SettingsKeys.miniViewerShowRecentSessionsOnly)
         }
         set { defaults.set(newValue, forKey: SettingsKeys.miniViewerShowRecentSessionsOnly) }
+    }
+
+    var miniViewerKeepOneSessionPerProjectWhenFilteringRecent: Bool {
+        get {
+            guard defaults.object(forKey: SettingsKeys.miniViewerKeepOneSessionPerProjectWhenFilteringRecent) != nil else {
+                return Self.defaultMiniViewerKeepOneSessionPerProjectWhenFilteringRecent
+            }
+            return defaults.bool(forKey: SettingsKeys.miniViewerKeepOneSessionPerProjectWhenFilteringRecent)
+        }
+        set { defaults.set(newValue, forKey: SettingsKeys.miniViewerKeepOneSessionPerProjectWhenFilteringRecent) }
     }
 
     var miniViewerRecentActivityWindowMinutes: Int {

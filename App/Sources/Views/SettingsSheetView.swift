@@ -52,16 +52,16 @@ struct SettingsSheetView: View {
 
                         settingsDivider
 
-                        settingsSection("Hotkeys") {
-                            globalHotkeyRow
-                            shortcutsReferenceRows
+                        settingsSection("Mini Viewer") {
+                            miniViewerHotkeyRow
+                            miniViewerOptionsRows
                         }
 
                         settingsDivider
 
-                        settingsSection("Mini Viewer") {
-                            miniViewerHotkeyRow
-                            miniViewerOptionsRows
+                        settingsSection("Hotkeys") {
+                            globalHotkeyRow
+                            shortcutsReferenceRows
                         }
 
                         settingsDivider
@@ -360,11 +360,24 @@ struct SettingsSheetView: View {
                 }
             }
 
+            Text("Recent Session Filter")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .textCase(.uppercase)
+                .padding(.top, 4)
+
             Toggle("Only show sessions active in the last X minutes", isOn: Binding(
                 get: { store.miniViewerShowRecentSessionsOnly },
                 set: { store.updateMiniViewerShowRecentSessionsOnly($0) }
             ))
             .font(.callout)
+
+            Toggle("Keep one session per project even if older than X (to make switching easier)", isOn: Binding(
+                get: { store.miniViewerKeepOneSessionPerProjectWhenFilteringRecent },
+                set: { store.updateMiniViewerKeepOneSessionPerProjectWhenFilteringRecent($0) }
+            ))
+            .font(.callout)
+            .disabled(!store.miniViewerShowRecentSessionsOnly)
 
             SettingsRow("Active Window") {
                 HStack(spacing: 8) {

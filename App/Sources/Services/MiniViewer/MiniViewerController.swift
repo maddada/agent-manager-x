@@ -43,6 +43,7 @@ final class MiniViewerController {
     private var pinnedScreenTarget: MiniViewerScreenTarget
     private var uiElementSize: UIElementSize
     private var showRecentSessionsOnly: Bool
+    private var keepOneSessionPerProjectWhenFilteringRecent: Bool
     private var recentActivityWindowMinutes: Int
     private var maxSessions: Int
     private var useSlowerCompatibleProjectSwitching: Bool
@@ -83,6 +84,7 @@ final class MiniViewerController {
         pinnedScreenTarget = settings.miniViewerPinnedScreenTarget
         uiElementSize = settings.miniViewerUIElementSize.clampedForMiniViewer
         showRecentSessionsOnly = settings.miniViewerShowRecentSessionsOnly
+        keepOneSessionPerProjectWhenFilteringRecent = settings.miniViewerKeepOneSessionPerProjectWhenFilteringRecent
         recentActivityWindowMinutes = settings.miniViewerRecentActivityWindowMinutes
         maxSessions = settings.miniViewerMaxSessions
         useSlowerCompatibleProjectSwitching = settings.useSlowerCompatibleProjectSwitching
@@ -115,12 +117,14 @@ final class MiniViewerController {
         }
     }
 
-    func setRecentActivityFilter(enabled: Bool, minutes: Int) {
+    func setRecentActivityFilter(enabled: Bool, minutes: Int, keepOneSessionPerProject: Bool) {
         queue.async {
             let clampedMinutes = max(1, minutes)
             self.showRecentSessionsOnly = enabled
+            self.keepOneSessionPerProjectWhenFilteringRecent = keepOneSessionPerProject
             self.recentActivityWindowMinutes = clampedMinutes
             self.settings.miniViewerShowRecentSessionsOnly = enabled
+            self.settings.miniViewerKeepOneSessionPerProjectWhenFilteringRecent = keepOneSessionPerProject
             self.settings.miniViewerRecentActivityWindowMinutes = clampedMinutes
             self.requestPayloadRefreshLocked()
         }
@@ -420,6 +424,8 @@ final class MiniViewerController {
             visibleSessions = response.sessions
         }
 
+        let allVisibleSessions = visibleSessions
+
         if showRecentSessionsOnly {
             let cutoff = Date().addingTimeInterval(TimeInterval(-recentActivityWindowMinutes * 60))
             visibleSessions = visibleSessions.filter { session in
@@ -428,23 +434,66 @@ final class MiniViewerController {
                 }
                 return lastActivityDate >= cutoff
             }
+
+            if keepOneSessionPerProjectWhenFilteringRecent {
+                var preservedSessionsByProject: [String: Session] = [:]
+                for session in allVisibleSessions {
+                    let projectPath = session.projectPath
+                    guard let existing = preservedSessionsByProject[projectPath] else {
+                        preservedSessionsByProject[projectPath] = session
+                        continue
+                    }
+
+                    let sessionDate = sessionActivityDate(session)
+                    let existingDate = sessionActivityDate(existing)
+                    if sessionDate > existingDate ||
+                        (sessionDate == existingDate && areSessionsOrderedForMiniViewerVisibility(session, existing)) {
+                        preservedSessionsByProject[projectPath] = session
+                    }
+                }
+
+                let alreadyVisibleProjectPaths = Set(visibleSessions.map(\.projectPath))
+                for (projectPath, session) in preservedSessionsByProject where !alreadyVisibleProjectPaths.contains(projectPath) {
+                    visibleSessions.append(session)
+                }
+            }
         }
 
-        visibleSessions.sort { lhs, rhs in
-            let lhsPriority = miniViewerPriority(for: lhs.status)
-            let rhsPriority = miniViewerPriority(for: rhs.status)
-            if lhsPriority != rhsPriority {
-                return lhsPriority < rhsPriority
+        var guaranteedSessionsByProject: [String: Session] = [:]
+        for session in visibleSessions {
+            let projectPath = session.projectPath
+            guard let existing = guaranteedSessionsByProject[projectPath] else {
+                guaranteedSessionsByProject[projectPath] = session
+                continue
             }
 
-            let lhsDate = SessionParsingSupport.parseISODate(lhs.lastActivityAt) ?? .distantPast
-            let rhsDate = SessionParsingSupport.parseISODate(rhs.lastActivityAt) ?? .distantPast
-            return lhsDate > rhsDate
+            let sessionDate = sessionActivityDate(session)
+            let existingDate = sessionActivityDate(existing)
+            if sessionDate > existingDate ||
+                (sessionDate == existingDate && areSessionsOrderedForMiniViewerVisibility(session, existing)) {
+                guaranteedSessionsByProject[projectPath] = session
+            }
         }
 
-        if visibleSessions.count > maxSessions {
-            visibleSessions = Array(visibleSessions.prefix(maxSessions))
+        var selectedSessions = guaranteedSessionsByProject.values.sorted(by: areSessionsOrderedForMiniViewerVisibility)
+        let guaranteedSessionIDs = Set(selectedSessions.map(\.id))
+
+        let protectedSessions = visibleSessions
+            .filter { isProtectedMiniViewerSession($0) && !guaranteedSessionIDs.contains($0.id) }
+            .sorted(by: areSessionsOrderedForMiniViewerVisibility)
+        selectedSessions.append(contentsOf: protectedSessions)
+
+        let selectedSessionIDs = Set(selectedSessions.map(\.id))
+
+        if selectedSessions.count < maxSessions {
+            let additionalSessions = visibleSessions
+                .filter { !selectedSessionIDs.contains($0.id) }
+                .sorted(by: areSessionsOrderedForMiniViewerVisibility)
+
+            selectedSessions.append(contentsOf: additionalSessions.prefix(maxSessions - selectedSessions.count))
         }
+
+        visibleSessions = selectedSessions
 
         var projects: [MiniViewerProjectPayload] = []
         var indexByPath: [String: Int] = [:]
@@ -522,6 +571,42 @@ final class MiniViewerController {
         }
 
         return lhs.pid < rhs.pid
+    }
+
+    private func areSessionsOrderedForMiniViewerVisibility(
+        _ lhs: Session,
+        _ rhs: Session
+    ) -> Bool {
+        let lhsPriority = miniViewerPriority(for: lhs.status)
+        let rhsPriority = miniViewerPriority(for: rhs.status)
+        if lhsPriority != rhsPriority {
+            return lhsPriority < rhsPriority
+        }
+
+        let lhsDate = sessionActivityDate(lhs)
+        let rhsDate = sessionActivityDate(rhs)
+        if lhsDate != rhsDate {
+            return lhsDate > rhsDate
+        }
+
+        if lhs.id != rhs.id {
+            return lhs.id < rhs.id
+        }
+
+        return lhs.pid < rhs.pid
+    }
+
+    private func sessionActivityDate(_ session: Session) -> Date {
+        SessionParsingSupport.parseISODate(session.lastActivityAt) ?? .distantPast
+    }
+
+    private func isProtectedMiniViewerSession(_ session: Session) -> Bool {
+        switch session.status {
+        case .waiting, .processing, .thinking:
+            return true
+        case .idle, .stale:
+            return false
+        }
     }
 
     private func miniViewerPriority(for status: SessionStatus) -> Int {
@@ -670,6 +755,12 @@ final class MiniViewerController {
             return devPath
         }
 
+        let materializedResources = try materializedMiniViewerResourcesDirectoryLocked()
+        let materializedSource = materializedResources.appendingPathComponent("MiniViewer.swift")
+        if fileManager.fileExists(atPath: materializedSource.path) {
+            return materializedSource
+        }
+
         throw MiniViewerControllerError.sourceNotFound
     }
 
@@ -695,6 +786,12 @@ final class MiniViewerController {
 
         if miniViewerIconsExist(in: iconDirectory) {
             return iconDirectory
+        }
+
+        let materializedResources = try materializedMiniViewerResourcesDirectoryLocked()
+        let materializedIconDirectory = materializedResources.appendingPathComponent("icons", isDirectory: true)
+        if miniViewerIconsExist(in: materializedIconDirectory) {
+            return materializedIconDirectory
         }
 
         throw MiniViewerControllerError.iconDirectoryNotFound
@@ -759,6 +856,36 @@ final class MiniViewerController {
         let directory = base.appendingPathComponent(bundleIdentifier, isDirectory: true)
         try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
         return directory
+    }
+
+    private func materializedMiniViewerResourcesDirectoryLocked() throws -> URL {
+        let directory = try appSupportDirectoryLocked()
+            .appendingPathComponent("native-mini-viewer-fallback", isDirectory: true)
+        let iconsDirectory = directory.appendingPathComponent("icons", isDirectory: true)
+
+        try fileManager.createDirectory(at: iconsDirectory, withIntermediateDirectories: true)
+        try writeMiniViewerResourceIfNeeded(
+            MiniViewerBundledResources.source,
+            to: directory.appendingPathComponent("MiniViewer.swift")
+        )
+
+        for (fileName, contents) in MiniViewerBundledResources.icons {
+            try writeMiniViewerResourceIfNeeded(
+                contents,
+                to: iconsDirectory.appendingPathComponent(fileName)
+            )
+        }
+
+        return directory
+    }
+
+    private func writeMiniViewerResourceIfNeeded(_ contents: String, to url: URL) throws {
+        let data = Data(contents.utf8)
+        if let existingData = try? Data(contentsOf: url), existingData == data {
+            return
+        }
+
+        try data.write(to: url, options: .atomic)
     }
 
     private func miniViewerIconsExist(in directory: URL) -> Bool {

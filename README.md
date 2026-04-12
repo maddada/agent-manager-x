@@ -2,7 +2,7 @@
 
 A macOS desktop app to monitor your Claude Code, Codex, OpenCode AI coding agents in real-time with voice or bell notifications. Easily jump to a conversation in any editor or terminal!
 
-Shows RAM and CPU usage for every running session and lets you code Stale or Idle chats that are wasting memory with 1 click!
+Shows RAM and CPU usage for every running session and lets you close stale or idle chats that are wasting memory with one click.
 
 This project is built as a native macOS app with Swift and SwiftUI to make it very snappy and light.
 
@@ -16,7 +16,9 @@ Please star his repo here: https://github.com/ozankasikci/agent-sessions.
 brew install --cask maddada/tap/agent-manager-x
 ```
 
-Or download the latest DMG from [GitHub Releases](https://github.com/maddada/agent-manager-x-swift/releases).
+Or download the latest DMG from [GitHub Releases](https://github.com/maddada/agent-manager-x/releases).
+
+See [changelog.md](./changelog.md) for release notes and version history.
 
 ---
 
@@ -49,20 +51,21 @@ https://youtube.com/watch?v=5LRAKaYJXjw
 - View all active coding agent sessions in one place
 - Real-time status detection (Thinking, Processing, Waiting, Idle)
 - Global hotkey to toggle visibility (default: `Ctrl+Space`, configurable, I personally use ctrl+shift+cmd+s)
-- Mini floating display mode that shows spinning indicator for all running sessions and yellow sign for ones that recently finished so you can jump back to them!
-- Configurable run, build, commit, push, buttons for each project.
-- Reliably shows current progress and status of all sessions.
-- Shows cpu and ram consumption of all sessions and lets you code all stale sessions with 1 click to save ram.
+- Mini floating display mode with per-monitor pinning, session caps, smarter recent-session filtering, and quick project switching
+- Configurable run, build, commit, and push buttons for each project
+- Reliably shows current progress and status of all sessions
+- Shows CPU and RAM consumption for all sessions and lets you close stale sessions with one click to save resources
 - Improved UX in a bunch of areas like grouping sessions per project
 - Added audio notifications for Codex and Claude Code (Summary Text to Speech and Bell modes)
 - Claude Code, OpenCode, and Codex CLI support
-- Lot of editors and terminals supported.
-- Added ability to click on a session to instantly jump to it.
+- A lot of editors and terminals supported
+- Added ability to click on a session to instantly jump to it
 - Remember last location and size
 - Default Editor and Default Terminal Support
 - Themes and background image support
-- Close buttons for a project's sessions, for all from specific agent, for all stale sessions, etc.
-- Added fading and sorting based on the last activity on each session (5 mins = idle, 10 minutes = stale) 
+- Close buttons for a project's sessions, for all from a specific agent, for all stale sessions, etc.
+- Added fading and sorting based on the last activity on each session (5 mins = idle, 10 minutes = stale)
+- Supports both process-based session discovery and VSmux-backed session views
 
 Please ask or do a PR if you have any feature ideas!
 
@@ -71,4 +74,3 @@ Please ask or do a PR if you have any feature ideas!
 - **Claude Code** - Anthropic's official CLI for Claude
 - **OpenCode** - Open-source AI coding assistant
 - **Codex** - OpenAI's coding agent CLI
-

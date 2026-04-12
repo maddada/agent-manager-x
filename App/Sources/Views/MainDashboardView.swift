@@ -95,7 +95,7 @@ private struct AppHeaderView: View {
                     }
 
                     if store.waitingCount > 0 {
-                        StatBadge(label: "\(store.waitingCount) waiting", tint: .yellow)
+                        StatBadge(label: "\(store.waitingCount) done", tint: .green)
                             .layoutPriority(1)
                     }
                 }
@@ -107,7 +107,7 @@ private struct AppHeaderView: View {
                     }
 
                     if store.waitingCount > 0 {
-                        StatBadge(label: "\(store.waitingCount) waiting", tint: .yellow)
+                        StatBadge(label: "\(store.waitingCount) done", tint: .green)
                     }
                 }
                 .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
@@ -1519,32 +1519,33 @@ private struct SessionStatusStyle {
     let badgeBackground: Color
     let cardBackground: Color
     let cardBorder: Color
+    private static let activeOrange = Color(red: 252.0 / 255.0, green: 178.0 / 255.0, blue: 83.0 / 255.0)
 
     static func from(status: SessionStatus) -> SessionStatusStyle {
         switch status {
         case .thinking:
             return SessionStatusStyle(
                 label: "Responding",
-                accent: .blue,
-                badgeBackground: .blue.opacity(0.2),
-                cardBackground: .blue.opacity(0.12),
-                cardBorder: .blue.opacity(0.25)
+                accent: activeOrange,
+                badgeBackground: activeOrange.opacity(0.2),
+                cardBackground: activeOrange.opacity(0.12),
+                cardBorder: activeOrange.opacity(0.25)
             )
         case .processing:
             return SessionStatusStyle(
                 label: "Processing",
-                accent: .blue,
-                badgeBackground: .blue.opacity(0.2),
-                cardBackground: .blue.opacity(0.12),
-                cardBorder: .blue.opacity(0.25)
+                accent: activeOrange,
+                badgeBackground: activeOrange.opacity(0.2),
+                cardBackground: activeOrange.opacity(0.12),
+                cardBorder: activeOrange.opacity(0.25)
             )
         case .waiting:
             return SessionStatusStyle(
-                label: "Waiting",
-                accent: .yellow,
-                badgeBackground: .yellow.opacity(0.22),
-                cardBackground: .yellow.opacity(0.10),
-                cardBorder: .yellow.opacity(0.24)
+                label: "Done",
+                accent: .green,
+                badgeBackground: .green.opacity(0.22),
+                cardBackground: .green.opacity(0.10),
+                cardBorder: .green.opacity(0.24)
             )
         case .idle:
             return SessionStatusStyle(

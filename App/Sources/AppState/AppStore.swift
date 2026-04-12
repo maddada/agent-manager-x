@@ -43,6 +43,7 @@ final class AppStore: ObservableObject {
     @Published var miniViewerPinnedScreenTarget: MiniViewerScreenTarget
     @Published var miniViewerShowOnStart: Bool
     @Published var miniViewerShowRecentSessionsOnly: Bool
+    @Published var miniViewerKeepOneSessionPerProjectWhenFilteringRecent: Bool
     @Published var miniViewerRecentActivityWindowMinutes: Int
     @Published var miniViewerMaxSessions: Int
     @Published var mainAppUIElementSize: UIElementSize
@@ -128,6 +129,7 @@ final class AppStore: ObservableObject {
         miniViewerPinnedScreenTarget = settings.miniViewerPinnedScreenTarget
         miniViewerShowOnStart = settings.miniViewerShowOnStart
         miniViewerShowRecentSessionsOnly = settings.miniViewerShowRecentSessionsOnly
+        miniViewerKeepOneSessionPerProjectWhenFilteringRecent = settings.miniViewerKeepOneSessionPerProjectWhenFilteringRecent
         miniViewerRecentActivityWindowMinutes = settings.miniViewerRecentActivityWindowMinutes
         miniViewerMaxSessions = settings.miniViewerMaxSessions
         mainAppUIElementSize = settings.mainAppUIElementSize
@@ -684,7 +686,18 @@ final class AppStore: ObservableObject {
         settings.miniViewerShowRecentSessionsOnly = enabled
         miniViewerController.setRecentActivityFilter(
             enabled: enabled,
-            minutes: miniViewerRecentActivityWindowMinutes
+            minutes: miniViewerRecentActivityWindowMinutes,
+            keepOneSessionPerProject: miniViewerKeepOneSessionPerProjectWhenFilteringRecent
+        )
+    }
+
+    func updateMiniViewerKeepOneSessionPerProjectWhenFilteringRecent(_ enabled: Bool) {
+        miniViewerKeepOneSessionPerProjectWhenFilteringRecent = enabled
+        settings.miniViewerKeepOneSessionPerProjectWhenFilteringRecent = enabled
+        miniViewerController.setRecentActivityFilter(
+            enabled: miniViewerShowRecentSessionsOnly,
+            minutes: miniViewerRecentActivityWindowMinutes,
+            keepOneSessionPerProject: enabled
         )
     }
 
@@ -694,7 +707,8 @@ final class AppStore: ObservableObject {
         settings.miniViewerRecentActivityWindowMinutes = clampedValue
         miniViewerController.setRecentActivityFilter(
             enabled: miniViewerShowRecentSessionsOnly,
-            minutes: clampedValue
+            minutes: clampedValue,
+            keepOneSessionPerProject: miniViewerKeepOneSessionPerProjectWhenFilteringRecent
         )
     }
 
@@ -861,7 +875,8 @@ final class AppStore: ObservableObject {
         miniViewerController.setUIElementSize(miniViewerUIElementSize)
         miniViewerController.setRecentActivityFilter(
             enabled: miniViewerShowRecentSessionsOnly,
-            minutes: miniViewerRecentActivityWindowMinutes
+            minutes: miniViewerRecentActivityWindowMinutes,
+            keepOneSessionPerProject: miniViewerKeepOneSessionPerProjectWhenFilteringRecent
         )
         miniViewerController.setMaxSessions(miniViewerMaxSessions)
         miniViewerController.setUseSlowerCompatibleProjectSwitching(useSlowerCompatibleProjectSwitching)
@@ -1382,12 +1397,18 @@ final class AppStore: ObservableObject {
 
         if miniViewerShowRecentSessionsOnly {
             let cutoff = Date().addingTimeInterval(TimeInterval(-miniViewerRecentActivityWindowMinutes * 60))
-            visibleSessions = visibleSessions.filter { session in
+            let recentSessions = visibleSessions.filter { session in
                 guard let lastActivityDate = SessionParsingSupport.parseISODate(session.lastActivityAt) else {
                     return false
                 }
                 return lastActivityDate >= cutoff
             }
+
+            if miniViewerKeepOneSessionPerProjectWhenFilteringRecent {
+                return !visibleSessions.isEmpty
+            }
+
+            visibleSessions = recentSessions
         }
 
         return !visibleSessions.prefix(miniViewerMaxSessions).isEmpty

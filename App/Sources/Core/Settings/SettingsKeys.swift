@@ -9,6 +9,7 @@ enum SettingsKeys {
     static let miniViewerPinnedScreenNameSnapshot = "agent-manager-x-mini-viewer-pinned-screen-name-snapshot"
     static let miniViewerShowOnStart = "agent-manager-x-mini-viewer-show-on-start"
     static let miniViewerShowRecentSessionsOnly = "agent-manager-x-mini-viewer-show-recent-sessions-only"
+    static let miniViewerKeepOneSessionPerProjectWhenFilteringRecent = "agent-manager-x-mini-viewer-keep-one-session-per-project-when-filtering-recent"
     static let miniViewerRecentActivityWindowMinutes = "agent-manager-x-mini-viewer-recent-activity-window-minutes"
     static let miniViewerMaxSessions = "agent-manager-x-mini-viewer-max-sessions"
     static let mainAppUIElementSize = "agent-manager-x-main-app-ui-element-size"
