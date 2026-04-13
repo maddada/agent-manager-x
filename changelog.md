@@ -2,6 +2,17 @@
 
 All notable changes to Agent Manager X will be documented in this file.
 
+## 2.1 - 2026-04-13
+
+### Added
+
+- Added a configurable mini viewer expand delay control in Settings so you can tune how quickly the floating sidebar opens on hover.
+- Added overflow protection for active VSmux mini viewer sessions so important sessions stay visible even when recent-session filtering or max-session limits would normally push them out.
+
+### Fixed
+
+- Improved bundled mini viewer hover expansion with a more forgiving hover strip and delayed expansion behavior, especially when the viewer is collapsed on the right edge.
+
 ## 2.0 - 2026-04-12
 
 ### Added

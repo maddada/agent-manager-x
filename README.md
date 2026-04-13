@@ -22,6 +22,14 @@ See [changelog.md](./changelog.md) for release notes and version history.
 
 ---
 
+## Latest in 2.1
+
+- Configurable mini viewer expand delay so you can make hover expansion feel snappier or calmer.
+- Better bundled mini viewer hover detection, including a more forgiving hover strip when the sidebar is collapsed.
+- Overflow protection for active VSmux sessions so important sessions stay visible even when filters or limits are tight.
+
+---
+
 ## (New!) Mini floating sidebar mode
 
 Sticks to the left/right side of your screen. Hover to see all details. Click to jump to terminal. Always visible. Toggleable with hotkey! <br />
@@ -51,7 +59,7 @@ https://youtube.com/watch?v=5LRAKaYJXjw
 - View all active coding agent sessions in one place
 - Real-time status detection (Thinking, Processing, Waiting, Idle)
 - Global hotkey to toggle visibility (default: `Ctrl+Space`, configurable, I personally use ctrl+shift+cmd+s)
-- Mini floating display mode with per-monitor pinning, session caps, smarter recent-session filtering, and quick project switching
+- Mini floating display mode with per-monitor pinning, session caps, smarter recent-session filtering, configurable expand delay, and quick project switching
 - Configurable run, build, commit, and push buttons for each project
 - Reliably shows current progress and status of all sessions
 - Shows CPU and RAM consumption for all sessions and lets you close stale sessions with one click to save resources
@@ -65,7 +73,7 @@ https://youtube.com/watch?v=5LRAKaYJXjw
 - Themes and background image support
 - Close buttons for a project's sessions, for all from a specific agent, for all stale sessions, etc.
 - Added fading and sorting based on the last activity on each session (5 mins = idle, 10 minutes = stale)
-- Supports both process-based session discovery and VSmux-backed session views
+- Supports both process-based session discovery and VSmux-backed session views, including protected active overflow sessions
 
 Please ask or do a PR if you have any feature ideas!
 
