@@ -6,6 +6,7 @@ struct SettingsSheetView: View {
     @State private var globalHotkeyDraft = ""
     @State private var miniViewerHotkeyDraft = ""
     @State private var overlayColorDraft = ""
+    @State private var miniViewerExpandDelayDraft = ""
     @State private var miniViewerRecentActivityWindowDraft = ""
     @State private var miniViewerMaxSessionsDraft = ""
 
@@ -379,6 +380,21 @@ struct SettingsSheetView: View {
             .font(.callout)
             .disabled(!store.miniViewerShowRecentSessionsOnly)
 
+            SettingsRow("Expand Delay") {
+                HStack(spacing: 8) {
+                    TextField("300", text: $miniViewerExpandDelayDraft)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 72)
+                        .onChange(of: miniViewerExpandDelayDraft, initial: false) { _, newValue in
+                            applyMiniViewerExpandDelayDraft(newValue)
+                        }
+
+                    Text("ms")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
             SettingsRow("Active Window") {
                 HStack(spacing: 8) {
                     TextField("15", text: $miniViewerRecentActivityWindowDraft)
@@ -533,8 +549,23 @@ struct SettingsSheetView: View {
         globalHotkeyDraft = store.globalHotkey
         miniViewerHotkeyDraft = store.miniViewerHotkey
         overlayColorDraft = store.overlayColor
+        miniViewerExpandDelayDraft = String(store.miniViewerExpandDelayMilliseconds)
         miniViewerRecentActivityWindowDraft = String(store.miniViewerRecentActivityWindowMinutes)
         miniViewerMaxSessionsDraft = String(store.miniViewerMaxSessions)
+    }
+
+    private func applyMiniViewerExpandDelayDraft(_ rawValue: String) {
+        let digitsOnly = rawValue.filter(\.isNumber)
+        if digitsOnly != rawValue {
+            miniViewerExpandDelayDraft = digitsOnly
+            return
+        }
+
+        guard let value = Int(digitsOnly), value >= 0 else {
+            return
+        }
+
+        store.updateMiniViewerExpandDelayMilliseconds(value)
     }
 
     private func applyMiniViewerRecentActivityWindowDraft(_ rawValue: String) {
