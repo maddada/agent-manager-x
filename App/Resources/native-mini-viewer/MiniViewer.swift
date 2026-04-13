@@ -132,6 +132,7 @@ private struct MiniViewerPayload: Codable {
     let showOnActiveMonitor: Bool
     let pinnedScreenTarget: String
     let uiElementSize: UIElementSize
+    let expandDelayMilliseconds: Int
     let isVisible: Bool
     let projects: [MiniViewerProject]
 }
@@ -208,11 +209,13 @@ private final class ViewerModel: ObservableObject {
     @Published var showOnActiveMonitor = false
     @Published var pinnedScreenTarget = "primary"
     @Published var uiElementSize: UIElementSize = .small
+    @Published var expandDelayMilliseconds = 300
     @Published var isVisible = true
     @Published var projects: [MiniViewerProject] = []
     @Published var isExpanded = false
     @Published var showDetails = false
     private var isPointerInside = false
+    private var expandTask: DispatchWorkItem?
     private var collapseTask: DispatchWorkItem?
 
     var sessions: [MiniViewerSession] {
@@ -228,6 +231,7 @@ private final class ViewerModel: ObservableObject {
         showOnActiveMonitor = payload.showOnActiveMonitor
         pinnedScreenTarget = payload.pinnedScreenTarget
         uiElementSize = payload.uiElementSize
+        expandDelayMilliseconds = max(0, payload.expandDelayMilliseconds)
         isVisible = payload.isVisible
         projects = payload.projects
     }
@@ -238,15 +242,22 @@ private final class ViewerModel: ObservableObject {
         }
 
         isPointerInside = hovering
+        expandTask?.cancel()
         collapseTask?.cancel()
 
         if hovering {
-            withAnimation(.easeInOut(duration: 0.16)) {
-                showDetails = true
+            let task = DispatchWorkItem { [weak self] in
+                guard let self else { return }
+                guard self.isPointerInside else { return }
+                withAnimation(.easeInOut(duration: 0.16)) {
+                    self.showDetails = true
+                }
+                withAnimation(.easeInOut(duration: 0.14)) {
+                    self.isExpanded = true
+                }
             }
-            withAnimation(.easeInOut(duration: 0.14)) {
-                isExpanded = true
-            }
+            expandTask = task
+            DispatchQueue.main.asyncAfter(deadline: .now() + expandDelay, execute: task)
             return
         }
 
@@ -263,6 +274,10 @@ private final class ViewerModel: ObservableObject {
         }
         collapseTask = task
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.12, execute: task)
+    }
+
+    private var expandDelay: TimeInterval {
+        TimeInterval(expandDelayMilliseconds) / 1000
     }
 }
 
@@ -1147,8 +1162,10 @@ final class MiniViewerAppDelegate: NSObject, NSApplicationDelegate {
             let windowRect = contentView.convert(iconFrame, to: nil)
             return panel.convertToScreen(windowRect)
         }
+        let liveHoverStripRect = hoverStripRect(for: liveIconRects)
 
         let rightCollapsedAnchorRects: [NSRect]
+        let rightCollapsedHoverStripRect: NSRect?
         if model.side == .right && model.isExpanded {
             let collapsedPanelMinX = screenFrame.maxX - collapsedWidth
             let expandedPanelMinX = panel.frame.minX
@@ -1156,13 +1173,40 @@ final class MiniViewerAppDelegate: NSObject, NSApplicationDelegate {
             rightCollapsedAnchorRects = liveIconRects.map { rect in
                 rect.offsetBy(dx: anchorShiftX, dy: 0)
             }
+            rightCollapsedHoverStripRect = liveHoverStripRect?.offsetBy(dx: anchorShiftX, dy: 0)
         } else {
             rightCollapsedAnchorRects = []
+            rightCollapsedHoverStripRect = nil
         }
 
         let hoveringIcon = liveIconRects.contains(where: { $0.contains(pointer) }) ||
-            rightCollapsedAnchorRects.contains(where: { $0.contains(pointer) })
+            rightCollapsedAnchorRects.contains(where: { $0.contains(pointer) }) ||
+            liveHoverStripRect?.contains(pointer) == true ||
+            rightCollapsedHoverStripRect?.contains(pointer) == true
         model.setHovering(hoveringIcon)
+    }
+
+    private func hoverStripRect(for iconRects: [NSRect]) -> NSRect? {
+        guard !iconRects.isEmpty else { return nil }
+
+        let hoverWidth = 34 * chromeScale
+        let hoverHeight = 34 * chromeScale
+
+        let normalizedRects = iconRects.map { rect in
+            NSRect(
+                x: rect.midX - (hoverWidth / 2),
+                y: rect.midY - (hoverHeight / 2),
+                width: hoverWidth,
+                height: hoverHeight
+            )
+        }
+
+        let minX = normalizedRects.map(\.minX).min() ?? 0
+        let maxX = normalizedRects.map(\.maxX).max() ?? 0
+        let minY = normalizedRects.map(\.minY).min() ?? 0
+        let maxY = normalizedRects.map(\.maxY).max() ?? 0
+
+        return NSRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
     }
 
     private func activateSession(_ session: MiniViewerSession) {
