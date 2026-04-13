@@ -44,6 +44,7 @@ final class MiniViewerController {
     private var uiElementSize: UIElementSize
     private var showRecentSessionsOnly: Bool
     private var keepOneSessionPerProjectWhenFilteringRecent: Bool
+    private var expandDelayMilliseconds: Int
     private var recentActivityWindowMinutes: Int
     private var maxSessions: Int
     private var useSlowerCompatibleProjectSwitching: Bool
@@ -85,6 +86,7 @@ final class MiniViewerController {
         uiElementSize = settings.miniViewerUIElementSize.clampedForMiniViewer
         showRecentSessionsOnly = settings.miniViewerShowRecentSessionsOnly
         keepOneSessionPerProjectWhenFilteringRecent = settings.miniViewerKeepOneSessionPerProjectWhenFilteringRecent
+        expandDelayMilliseconds = settings.miniViewerExpandDelayMilliseconds
         recentActivityWindowMinutes = settings.miniViewerRecentActivityWindowMinutes
         maxSessions = settings.miniViewerMaxSessions
         useSlowerCompatibleProjectSwitching = settings.useSlowerCompatibleProjectSwitching
@@ -126,6 +128,15 @@ final class MiniViewerController {
             self.settings.miniViewerShowRecentSessionsOnly = enabled
             self.settings.miniViewerKeepOneSessionPerProjectWhenFilteringRecent = keepOneSessionPerProject
             self.settings.miniViewerRecentActivityWindowMinutes = clampedMinutes
+            self.requestPayloadRefreshLocked()
+        }
+    }
+
+    func setExpandDelayMilliseconds(_ value: Int) {
+        queue.async {
+            let clampedValue = max(0, value)
+            self.expandDelayMilliseconds = clampedValue
+            self.settings.miniViewerExpandDelayMilliseconds = clampedValue
             self.requestPayloadRefreshLocked()
         }
     }
@@ -395,6 +406,7 @@ final class MiniViewerController {
             showOnActiveMonitor: showOnActiveMonitor,
             pinnedScreenTarget: pinnedScreenTarget.storageValue,
             uiElementSize: uiElementSize,
+            expandDelayMilliseconds: expandDelayMilliseconds,
             isVisible: isVisible,
             projects: projects
         )
@@ -425,6 +437,7 @@ final class MiniViewerController {
         }
 
         let allVisibleSessions = visibleSessions
+        let protectedOverflowSessions = allVisibleSessions.filter(isOverflowProtectedMiniViewerSession)
 
         if showRecentSessionsOnly {
             let cutoff = Date().addingTimeInterval(TimeInterval(-recentActivityWindowMinutes * 60))
@@ -433,6 +446,13 @@ final class MiniViewerController {
                     return false
                 }
                 return lastActivityDate >= cutoff
+            }
+
+            if !protectedOverflowSessions.isEmpty {
+                let visibleSessionIDs = Set(visibleSessions.map(\.id))
+                for session in protectedOverflowSessions where !visibleSessionIDs.contains(session.id) {
+                    visibleSessions.append(session)
+                }
             }
 
             if keepOneSessionPerProjectWhenFilteringRecent {
@@ -477,17 +497,21 @@ final class MiniViewerController {
 
         var selectedSessions = guaranteedSessionsByProject.values.sorted(by: areSessionsOrderedForMiniViewerVisibility)
         let guaranteedSessionIDs = Set(selectedSessions.map(\.id))
+        let overflowSessionLimit = miniViewerOverflowSessionLimit()
 
         let protectedSessions = visibleSessions
-            .filter { isProtectedMiniViewerSession($0) && !guaranteedSessionIDs.contains($0.id) }
+            .filter { isOverflowProtectedMiniViewerSession($0) && !guaranteedSessionIDs.contains($0.id) }
             .sorted(by: areSessionsOrderedForMiniViewerVisibility)
-        selectedSessions.append(contentsOf: protectedSessions)
+        let protectedSessionBudget = max(0, overflowSessionLimit - selectedSessions.count)
+        if protectedSessionBudget > 0 {
+            selectedSessions.append(contentsOf: protectedSessions.prefix(protectedSessionBudget))
+        }
 
         let selectedSessionIDs = Set(selectedSessions.map(\.id))
 
         if selectedSessions.count < maxSessions {
             let additionalSessions = visibleSessions
-                .filter { !selectedSessionIDs.contains($0.id) }
+                .filter { !selectedSessionIDs.contains($0.id) && !isOverflowProtectedMiniViewerSession($0) }
                 .sorted(by: areSessionsOrderedForMiniViewerVisibility)
 
             selectedSessions.append(contentsOf: additionalSessions.prefix(maxSessions - selectedSessions.count))
@@ -607,6 +631,14 @@ final class MiniViewerController {
         case .idle, .stale:
             return false
         }
+    }
+
+    private func isOverflowProtectedMiniViewerSession(_ session: Session) -> Bool {
+        session.detailsSource == .vsmuxSessions && isProtectedMiniViewerSession(session)
+    }
+
+    private func miniViewerOverflowSessionLimit() -> Int {
+        max(maxSessions, Int(ceil(Double(maxSessions) * 1.5)))
     }
 
     private func miniViewerPriority(for status: SessionStatus) -> Int {
@@ -954,6 +986,7 @@ private struct MiniViewerPayload: Codable {
     let showOnActiveMonitor: Bool
     let pinnedScreenTarget: String
     let uiElementSize: UIElementSize
+    let expandDelayMilliseconds: Int
     let isVisible: Bool
     let projects: [MiniViewerProjectPayload]
 }

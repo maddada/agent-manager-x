@@ -12,6 +12,7 @@ final class SettingsStore {
     static let defaultMiniViewerShowOnStart = true
     static let defaultMiniViewerShowRecentSessionsOnly = true
     static let defaultMiniViewerKeepOneSessionPerProjectWhenFilteringRecent = true
+    static let defaultMiniViewerExpandDelayMilliseconds = 300
     static let defaultMiniViewerRecentActivityWindowMinutes = 15
     static let defaultMiniViewerMaxSessions = 10
     static let defaultMainAppUIElementSize: UIElementSize = .medium
@@ -101,6 +102,18 @@ final class SettingsStore {
             return defaults.bool(forKey: SettingsKeys.miniViewerKeepOneSessionPerProjectWhenFilteringRecent)
         }
         set { defaults.set(newValue, forKey: SettingsKeys.miniViewerKeepOneSessionPerProjectWhenFilteringRecent) }
+    }
+
+    var miniViewerExpandDelayMilliseconds: Int {
+        get {
+            guard defaults.object(forKey: SettingsKeys.miniViewerExpandDelayMilliseconds) != nil else {
+                return Self.defaultMiniViewerExpandDelayMilliseconds
+            }
+            return max(0, defaults.integer(forKey: SettingsKeys.miniViewerExpandDelayMilliseconds))
+        }
+        set {
+            defaults.set(max(0, newValue), forKey: SettingsKeys.miniViewerExpandDelayMilliseconds)
+        }
     }
 
     var miniViewerRecentActivityWindowMinutes: Int {

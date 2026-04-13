@@ -44,6 +44,7 @@ final class AppStore: ObservableObject {
     @Published var miniViewerShowOnStart: Bool
     @Published var miniViewerShowRecentSessionsOnly: Bool
     @Published var miniViewerKeepOneSessionPerProjectWhenFilteringRecent: Bool
+    @Published var miniViewerExpandDelayMilliseconds: Int
     @Published var miniViewerRecentActivityWindowMinutes: Int
     @Published var miniViewerMaxSessions: Int
     @Published var mainAppUIElementSize: UIElementSize
@@ -130,6 +131,7 @@ final class AppStore: ObservableObject {
         miniViewerShowOnStart = settings.miniViewerShowOnStart
         miniViewerShowRecentSessionsOnly = settings.miniViewerShowRecentSessionsOnly
         miniViewerKeepOneSessionPerProjectWhenFilteringRecent = settings.miniViewerKeepOneSessionPerProjectWhenFilteringRecent
+        miniViewerExpandDelayMilliseconds = settings.miniViewerExpandDelayMilliseconds
         miniViewerRecentActivityWindowMinutes = settings.miniViewerRecentActivityWindowMinutes
         miniViewerMaxSessions = settings.miniViewerMaxSessions
         mainAppUIElementSize = settings.mainAppUIElementSize
@@ -701,6 +703,13 @@ final class AppStore: ObservableObject {
         )
     }
 
+    func updateMiniViewerExpandDelayMilliseconds(_ value: Int) {
+        let clampedValue = max(0, value)
+        miniViewerExpandDelayMilliseconds = clampedValue
+        settings.miniViewerExpandDelayMilliseconds = clampedValue
+        miniViewerController.setExpandDelayMilliseconds(clampedValue)
+    }
+
     func updateMiniViewerRecentActivityWindowMinutes(_ value: Int) {
         let clampedValue = max(1, value)
         miniViewerRecentActivityWindowMinutes = clampedValue
@@ -878,6 +887,7 @@ final class AppStore: ObservableObject {
             minutes: miniViewerRecentActivityWindowMinutes,
             keepOneSessionPerProject: miniViewerKeepOneSessionPerProjectWhenFilteringRecent
         )
+        miniViewerController.setExpandDelayMilliseconds(miniViewerExpandDelayMilliseconds)
         miniViewerController.setMaxSessions(miniViewerMaxSessions)
         miniViewerController.setUseSlowerCompatibleProjectSwitching(useSlowerCompatibleProjectSwitching)
     }
@@ -1395,6 +1405,10 @@ final class AppStore: ObservableObject {
     private func miniViewerHasVisibleSessions() -> Bool {
         var visibleSessions = sessions
 
+        if visibleSessions.contains(where: isOverflowProtectedMiniViewerSession) {
+            return true
+        }
+
         if miniViewerShowRecentSessionsOnly {
             let cutoff = Date().addingTimeInterval(TimeInterval(-miniViewerRecentActivityWindowMinutes * 60))
             let recentSessions = visibleSessions.filter { session in
@@ -1412,6 +1426,19 @@ final class AppStore: ObservableObject {
         }
 
         return !visibleSessions.prefix(miniViewerMaxSessions).isEmpty
+    }
+
+    private func isOverflowProtectedMiniViewerSession(_ session: Session) -> Bool {
+        guard session.detailsSource == .vsmuxSessions else {
+            return false
+        }
+
+        switch session.status {
+        case .waiting, .processing, .thinking:
+            return true
+        case .idle, .stale:
+            return false
+        }
     }
 
     private func normalizedHexColor(_ rawValue: String) -> String? {
