@@ -1,5 +1,7 @@
 # Agent Manager X
 
+<img width="1293" height="837" alt="2026-04-14_Google Chrome_08-24-51@2x" src="https://github.com/user-attachments/assets/8362d3dd-5d62-4c3d-8b00-6f18de618b31" />
+
 A macOS desktop app to monitor your Claude Code, Codex, OpenCode AI coding agents in real-time with voice or bell notifications. Easily jump to a conversation in any editor or terminal!
 
 Shows RAM and CPU usage for every running session and lets you close stale or idle chats that are wasting memory with one click.
