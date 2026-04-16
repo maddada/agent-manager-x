@@ -51,6 +51,17 @@ struct Session: Codable, Hashable, Identifiable {
     var renderID: String {
         "\(detailsSource.rawValue):\(vsmuxWorkspaceID ?? "none"):\(agentType.rawValue):\(pid):\(id)"
     }
+
+    var shouldHideFromMiniViewer: Bool {
+        guard agentType == .claude,
+              projectPath == "/" else {
+            return false
+        }
+
+        let trimmedMessage = lastMessage?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let isNewSession = (trimmedMessage?.isEmpty ?? true) && (status == .waiting || status == .idle)
+        return isNewSession
+    }
 }
 
 struct SessionsResponse: Codable, Hashable {

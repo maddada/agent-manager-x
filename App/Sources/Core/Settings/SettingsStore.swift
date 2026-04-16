@@ -13,6 +13,8 @@ final class SettingsStore {
     static let defaultMiniViewerShowRecentSessionsOnly = true
     static let defaultMiniViewerKeepOneSessionPerProjectWhenFilteringRecent = true
     static let defaultMiniViewerExpandDelayMilliseconds = 300
+    static let defaultMiniViewerMakeWholeCardHoverable = false
+    static let defaultMiniViewerCollapseDelayMilliseconds = 300
     static let defaultMiniViewerRecentActivityWindowMinutes = 15
     static let defaultMiniViewerMaxSessions = 10
     static let defaultMainAppUIElementSize: UIElementSize = .medium
@@ -113,6 +115,28 @@ final class SettingsStore {
         }
         set {
             defaults.set(max(0, newValue), forKey: SettingsKeys.miniViewerExpandDelayMilliseconds)
+        }
+    }
+
+    var miniViewerMakeWholeCardHoverable: Bool {
+        get {
+            guard defaults.object(forKey: SettingsKeys.miniViewerMakeWholeCardHoverable) != nil else {
+                return Self.defaultMiniViewerMakeWholeCardHoverable
+            }
+            return defaults.bool(forKey: SettingsKeys.miniViewerMakeWholeCardHoverable)
+        }
+        set { defaults.set(newValue, forKey: SettingsKeys.miniViewerMakeWholeCardHoverable) }
+    }
+
+    var miniViewerCollapseDelayMilliseconds: Int {
+        get {
+            guard defaults.object(forKey: SettingsKeys.miniViewerCollapseDelayMilliseconds) != nil else {
+                return Self.defaultMiniViewerCollapseDelayMilliseconds
+            }
+            return max(0, defaults.integer(forKey: SettingsKeys.miniViewerCollapseDelayMilliseconds))
+        }
+        set {
+            defaults.set(max(0, newValue), forKey: SettingsKeys.miniViewerCollapseDelayMilliseconds)
         }
     }
 

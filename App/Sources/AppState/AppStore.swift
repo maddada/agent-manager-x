@@ -45,6 +45,8 @@ final class AppStore: ObservableObject {
     @Published var miniViewerShowRecentSessionsOnly: Bool
     @Published var miniViewerKeepOneSessionPerProjectWhenFilteringRecent: Bool
     @Published var miniViewerExpandDelayMilliseconds: Int
+    @Published var miniViewerMakeWholeCardHoverable: Bool
+    @Published var miniViewerCollapseDelayMilliseconds: Int
     @Published var miniViewerRecentActivityWindowMinutes: Int
     @Published var miniViewerMaxSessions: Int
     @Published var mainAppUIElementSize: UIElementSize
@@ -132,6 +134,8 @@ final class AppStore: ObservableObject {
         miniViewerShowRecentSessionsOnly = settings.miniViewerShowRecentSessionsOnly
         miniViewerKeepOneSessionPerProjectWhenFilteringRecent = settings.miniViewerKeepOneSessionPerProjectWhenFilteringRecent
         miniViewerExpandDelayMilliseconds = settings.miniViewerExpandDelayMilliseconds
+        miniViewerMakeWholeCardHoverable = settings.miniViewerMakeWholeCardHoverable
+        miniViewerCollapseDelayMilliseconds = settings.miniViewerCollapseDelayMilliseconds
         miniViewerRecentActivityWindowMinutes = settings.miniViewerRecentActivityWindowMinutes
         miniViewerMaxSessions = settings.miniViewerMaxSessions
         mainAppUIElementSize = settings.mainAppUIElementSize
@@ -710,6 +714,19 @@ final class AppStore: ObservableObject {
         miniViewerController.setExpandDelayMilliseconds(clampedValue)
     }
 
+    func updateMiniViewerMakeWholeCardHoverable(_ enabled: Bool) {
+        miniViewerMakeWholeCardHoverable = enabled
+        settings.miniViewerMakeWholeCardHoverable = enabled
+        miniViewerController.setMakeWholeCardHoverable(enabled)
+    }
+
+    func updateMiniViewerCollapseDelayMilliseconds(_ value: Int) {
+        let clampedValue = max(0, value)
+        miniViewerCollapseDelayMilliseconds = clampedValue
+        settings.miniViewerCollapseDelayMilliseconds = clampedValue
+        miniViewerController.setCollapseDelayMilliseconds(clampedValue)
+    }
+
     func updateMiniViewerRecentActivityWindowMinutes(_ value: Int) {
         let clampedValue = max(1, value)
         miniViewerRecentActivityWindowMinutes = clampedValue
@@ -849,7 +866,7 @@ final class AppStore: ObservableObject {
             }
         )
 
-        menuBarService.updateTitle(total: totalCount, waiting: waitingCount)
+        menuBarService.updateTitle(count: menuBarCount(for: sessions))
     }
 
     private func configureHotkeys() {
@@ -888,6 +905,8 @@ final class AppStore: ObservableObject {
             keepOneSessionPerProject: miniViewerKeepOneSessionPerProjectWhenFilteringRecent
         )
         miniViewerController.setExpandDelayMilliseconds(miniViewerExpandDelayMilliseconds)
+        miniViewerController.setMakeWholeCardHoverable(miniViewerMakeWholeCardHoverable)
+        miniViewerController.setCollapseDelayMilliseconds(miniViewerCollapseDelayMilliseconds)
         miniViewerController.setMaxSessions(miniViewerMaxSessions)
         miniViewerController.setUseSlowerCompatibleProjectSwitching(useSlowerCompatibleProjectSwitching)
     }
@@ -996,7 +1015,7 @@ final class AppStore: ObservableObject {
         updateGitDiffStats(for: stableForeground)
 
         errorMessage = nil
-        menuBarService.updateTitle(total: totalCount, waiting: waitingCount)
+        menuBarService.updateTitle(count: menuBarCount(for: stableForeground))
     }
 
     private func startActiveSessionSource() {
@@ -1010,6 +1029,17 @@ final class AppStore: ObservableObject {
         }
 
         vsmuxSessionBroker.start()
+    }
+
+    private func menuBarCount(for sessions: [Session]) -> Int {
+        sessions.filter { session in
+            switch session.status {
+            case .waiting, .processing, .thinking:
+                return true
+            case .idle, .stale:
+                return false
+            }
+        }.count
     }
 
     private func applyVSmuxWorkspaces(_ workspaces: [VSmuxWorkspaceSnapshot]) {
@@ -1403,7 +1433,7 @@ final class AppStore: ObservableObject {
     }
 
     private func miniViewerHasVisibleSessions() -> Bool {
-        var visibleSessions = sessions
+        var visibleSessions = sessions.filter { !$0.shouldHideFromMiniViewer }
 
         if visibleSessions.contains(where: isOverflowProtectedMiniViewerSession) {
             return true

@@ -45,6 +45,8 @@ final class MiniViewerController {
     private var showRecentSessionsOnly: Bool
     private var keepOneSessionPerProjectWhenFilteringRecent: Bool
     private var expandDelayMilliseconds: Int
+    private var makeWholeCardHoverable: Bool
+    private var collapseDelayMilliseconds: Int
     private var recentActivityWindowMinutes: Int
     private var maxSessions: Int
     private var useSlowerCompatibleProjectSwitching: Bool
@@ -87,6 +89,8 @@ final class MiniViewerController {
         showRecentSessionsOnly = settings.miniViewerShowRecentSessionsOnly
         keepOneSessionPerProjectWhenFilteringRecent = settings.miniViewerKeepOneSessionPerProjectWhenFilteringRecent
         expandDelayMilliseconds = settings.miniViewerExpandDelayMilliseconds
+        makeWholeCardHoverable = settings.miniViewerMakeWholeCardHoverable
+        collapseDelayMilliseconds = settings.miniViewerCollapseDelayMilliseconds
         recentActivityWindowMinutes = settings.miniViewerRecentActivityWindowMinutes
         maxSessions = settings.miniViewerMaxSessions
         useSlowerCompatibleProjectSwitching = settings.useSlowerCompatibleProjectSwitching
@@ -137,6 +141,23 @@ final class MiniViewerController {
             let clampedValue = max(0, value)
             self.expandDelayMilliseconds = clampedValue
             self.settings.miniViewerExpandDelayMilliseconds = clampedValue
+            self.requestPayloadRefreshLocked()
+        }
+    }
+
+    func setMakeWholeCardHoverable(_ enabled: Bool) {
+        queue.async {
+            self.makeWholeCardHoverable = enabled
+            self.settings.miniViewerMakeWholeCardHoverable = enabled
+            self.requestPayloadRefreshLocked()
+        }
+    }
+
+    func setCollapseDelayMilliseconds(_ value: Int) {
+        queue.async {
+            let clampedValue = max(0, value)
+            self.collapseDelayMilliseconds = clampedValue
+            self.settings.miniViewerCollapseDelayMilliseconds = clampedValue
             self.requestPayloadRefreshLocked()
         }
     }
@@ -407,6 +428,8 @@ final class MiniViewerController {
             pinnedScreenTarget: pinnedScreenTarget.storageValue,
             uiElementSize: uiElementSize,
             expandDelayMilliseconds: expandDelayMilliseconds,
+            makeWholeCardHoverable: makeWholeCardHoverable,
+            collapseDelayMilliseconds: collapseDelayMilliseconds,
             isVisible: isVisible,
             projects: projects
         )
@@ -435,6 +458,8 @@ final class MiniViewerController {
         } else {
             visibleSessions = response.sessions
         }
+
+        visibleSessions.removeAll(where: \.shouldHideFromMiniViewer)
 
         let allVisibleSessions = visibleSessions
         let protectedOverflowSessions = allVisibleSessions.filter(isOverflowProtectedMiniViewerSession)
@@ -584,6 +609,12 @@ final class MiniViewerController {
         _ lhs: MiniViewerSessionPayload,
         _ rhs: MiniViewerSessionPayload
     ) -> Bool {
+        let lhsPriority = miniViewerPriority(for: lhs.status)
+        let rhsPriority = miniViewerPriority(for: rhs.status)
+        if lhsPriority != rhsPriority {
+            return lhsPriority < rhsPriority
+        }
+
         let lhsDate = SessionParsingSupport.parseISODate(lhs.lastActivityAt) ?? .distantPast
         let rhsDate = SessionParsingSupport.parseISODate(rhs.lastActivityAt) ?? .distantPast
         if lhsDate != rhsDate {
@@ -987,6 +1018,8 @@ private struct MiniViewerPayload: Codable {
     let pinnedScreenTarget: String
     let uiElementSize: UIElementSize
     let expandDelayMilliseconds: Int
+    let makeWholeCardHoverable: Bool
+    let collapseDelayMilliseconds: Int
     let isVisible: Bool
     let projects: [MiniViewerProjectPayload]
 }

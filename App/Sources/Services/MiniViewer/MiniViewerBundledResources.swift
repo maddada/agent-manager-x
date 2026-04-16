@@ -137,6 +137,8 @@ private struct MiniViewerPayload: Codable {
     let pinnedScreenTarget: String
     let uiElementSize: UIElementSize
     let expandDelayMilliseconds: Int
+    let makeWholeCardHoverable: Bool
+    let collapseDelayMilliseconds: Int
     let isVisible: Bool
     let projects: [MiniViewerProject]
 }
@@ -214,6 +216,8 @@ private final class ViewerModel: ObservableObject {
     @Published var pinnedScreenTarget = "primary"
     @Published var uiElementSize: UIElementSize = .small
     @Published var expandDelayMilliseconds = 300
+    @Published var makeWholeCardHoverable = false
+    @Published var collapseDelayMilliseconds = 300
     @Published var isVisible = true
     @Published var projects: [MiniViewerProject] = []
     @Published var isExpanded = false
@@ -236,6 +240,8 @@ private final class ViewerModel: ObservableObject {
         pinnedScreenTarget = payload.pinnedScreenTarget
         uiElementSize = payload.uiElementSize
         expandDelayMilliseconds = max(0, payload.expandDelayMilliseconds)
+        makeWholeCardHoverable = payload.makeWholeCardHoverable
+        collapseDelayMilliseconds = max(0, payload.collapseDelayMilliseconds)
         isVisible = payload.isVisible
         projects = payload.projects
     }
@@ -265,23 +271,26 @@ private final class ViewerModel: ObservableObject {
             return
         }
 
-        withAnimation(.easeInOut(duration: 0.12)) {
-            showDetails = false
-        }
-
         let task = DispatchWorkItem { [weak self] in
             guard let self else { return }
             guard !self.isPointerInside else { return }
+            withAnimation(.easeInOut(duration: 0.12)) {
+                self.showDetails = false
+            }
             withAnimation(.easeInOut(duration: 0.14)) {
                 self.isExpanded = false
             }
         }
         collapseTask = task
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12, execute: task)
+        DispatchQueue.main.asyncAfter(deadline: .now() + collapseDelay, execute: task)
     }
 
     private var expandDelay: TimeInterval {
         TimeInterval(expandDelayMilliseconds) / 1000
+    }
+
+    private var collapseDelay: TimeInterval {
+        TimeInterval(collapseDelayMilliseconds) / 1000
     }
 }
 
@@ -1187,7 +1196,8 @@ final class MiniViewerAppDelegate: NSObject, NSApplicationDelegate {
             rightCollapsedAnchorRects.contains(where: { $0.contains(pointer) }) ||
             liveHoverStripRect?.contains(pointer) == true ||
             rightCollapsedHoverStripRect?.contains(pointer) == true
-        model.setHovering(hoveringIcon)
+        let hoveringExpandedCard = model.makeWholeCardHoverable && model.isExpanded && panel.frame.contains(pointer)
+        model.setHovering(hoveringIcon || hoveringExpandedCard)
     }
 
     private func hoverStripRect(for iconRects: [NSRect]) -> NSRect? {

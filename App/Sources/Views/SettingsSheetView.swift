@@ -7,6 +7,7 @@ struct SettingsSheetView: View {
     @State private var miniViewerHotkeyDraft = ""
     @State private var overlayColorDraft = ""
     @State private var miniViewerExpandDelayDraft = ""
+    @State private var miniViewerCollapseDelayDraft = ""
     @State private var miniViewerRecentActivityWindowDraft = ""
     @State private var miniViewerMaxSessionsDraft = ""
 
@@ -380,6 +381,16 @@ struct SettingsSheetView: View {
             .font(.callout)
             .disabled(!store.miniViewerShowRecentSessionsOnly)
 
+            Toggle("Make whole card hoverable", isOn: Binding(
+                get: { store.miniViewerMakeWholeCardHoverable },
+                set: { store.updateMiniViewerMakeWholeCardHoverable($0) }
+            ))
+            .font(.callout)
+
+            Text("Off keeps only the icon area hoverable. On still uses the icon to open first, then any expanded card area keeps the mini viewer open.")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+
             SettingsRow("Expand Delay") {
                 HStack(spacing: 8) {
                     TextField("300", text: $miniViewerExpandDelayDraft)
@@ -387,6 +398,21 @@ struct SettingsSheetView: View {
                         .frame(width: 72)
                         .onChange(of: miniViewerExpandDelayDraft, initial: false) { _, newValue in
                             applyMiniViewerExpandDelayDraft(newValue)
+                        }
+
+                    Text("ms")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            SettingsRow("Collapse Delay") {
+                HStack(spacing: 8) {
+                    TextField("300", text: $miniViewerCollapseDelayDraft)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 72)
+                        .onChange(of: miniViewerCollapseDelayDraft, initial: false) { _, newValue in
+                            applyMiniViewerCollapseDelayDraft(newValue)
                         }
 
                     Text("ms")
@@ -550,6 +576,7 @@ struct SettingsSheetView: View {
         miniViewerHotkeyDraft = store.miniViewerHotkey
         overlayColorDraft = store.overlayColor
         miniViewerExpandDelayDraft = String(store.miniViewerExpandDelayMilliseconds)
+        miniViewerCollapseDelayDraft = String(store.miniViewerCollapseDelayMilliseconds)
         miniViewerRecentActivityWindowDraft = String(store.miniViewerRecentActivityWindowMinutes)
         miniViewerMaxSessionsDraft = String(store.miniViewerMaxSessions)
     }
@@ -566,6 +593,20 @@ struct SettingsSheetView: View {
         }
 
         store.updateMiniViewerExpandDelayMilliseconds(value)
+    }
+
+    private func applyMiniViewerCollapseDelayDraft(_ rawValue: String) {
+        let digitsOnly = rawValue.filter(\.isNumber)
+        if digitsOnly != rawValue {
+            miniViewerCollapseDelayDraft = digitsOnly
+            return
+        }
+
+        guard let value = Int(digitsOnly), value >= 0 else {
+            return
+        }
+
+        store.updateMiniViewerCollapseDelayMilliseconds(value)
     }
 
     private func applyMiniViewerRecentActivityWindowDraft(_ rawValue: String) {

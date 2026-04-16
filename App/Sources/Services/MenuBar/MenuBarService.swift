@@ -50,15 +50,13 @@ final class MenuBarService: NSObject {
         onQuit = nil
     }
 
-    func updateTitle(total: Int, waiting: Int) {
+    func updateTitle(count: Int) {
         guard let button = statusItem?.button else {
             return
         }
 
-        if waiting > 0 {
-            button.title = "\(total) (\(waiting) idle)"
-        } else if total > 0 {
-            button.title = "\(total)"
+        if count > 0 {
+            button.title = "\(count)"
         } else {
             button.title = ""
         }
