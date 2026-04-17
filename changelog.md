@@ -2,6 +2,18 @@
 
 All notable changes to Agent Manager X will be documented in this file.
 
+## 2.2 - 2026-04-17
+
+### Added
+
+- Added a mini viewer option to keep the whole expanded card hoverable after opening, making the floating panel easier to interact with.
+- Added a configurable mini viewer collapse delay control in Settings for finer control over how quickly the sidebar closes after the pointer leaves.
+
+### Changed
+
+- Updated the menu bar count to show only active sessions instead of including idle ones.
+- Filtered out blank Claude sessions rooted at `/` from the mini viewer so throwaway new-session placeholders do not clutter the floating view.
+
 ## 2.1 - 2026-04-13
 
 ### Added

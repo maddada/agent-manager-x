@@ -25,11 +25,11 @@ See [changelog.md](./changelog.md) for release notes and version history.
 
 ---
 
-## Latest in 2.1
+## Latest in 2.2
 
-- Configurable mini viewer expand delay so you can make hover expansion feel snappier or calmer.
-- Better bundled mini viewer hover detection, including a more forgiving hover strip when the sidebar is collapsed.
-- Overflow protection for active VSmux sessions so important sessions stay visible even when filters or limits are tight.
+- Optional whole-card hovering for the mini viewer after it expands, so it stays open more naturally while you move across the panel.
+- Configurable collapse delay in addition to expand delay, giving you more control over the mini viewer's hover feel.
+- Cleaner mini viewer and menu bar signal by hiding blank root Claude placeholders and counting only active sessions in the menu bar.
 
 ---
 
@@ -62,7 +62,7 @@ https://youtube.com/watch?v=5LRAKaYJXjw
 - View all active coding agent sessions in one place
 - Real-time status detection (Thinking, Processing, Waiting, Idle)
 - Global hotkey to toggle visibility (default: `Ctrl+Space`, configurable, I personally use ctrl+shift+cmd+s)
-- Mini floating display mode with per-monitor pinning, session caps, smarter recent-session filtering, configurable expand delay, and quick project switching
+- Mini floating display mode with per-monitor pinning, session caps, smarter recent-session filtering, configurable expand and collapse delays, whole-card hover support, and quick project switching
 - Configurable run, build, commit, and push buttons for each project
 - Reliably shows current progress and status of all sessions
 - Shows CPU and RAM consumption for all sessions and lets you close stale sessions with one click to save resources
@@ -76,7 +76,7 @@ https://youtube.com/watch?v=5LRAKaYJXjw
 - Themes and background image support
 - Close buttons for a project's sessions, for all from a specific agent, for all stale sessions, etc.
 - Added fading and sorting based on the last activity on each session (5 mins = idle, 10 minutes = stale)
-- Supports both process-based session discovery and VSmux-backed session views, including protected active overflow sessions
+- Supports both process-based session discovery and VSmux-backed session views, including protected active overflow sessions and filtering for blank root Claude placeholders
 
 Please ask or do a PR if you have any feature ideas!
 
