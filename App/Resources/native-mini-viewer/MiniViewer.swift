@@ -485,6 +485,14 @@ private struct SessionRowView: View {
         56 * chromeScale
     }
 
+    private var statusIndicatorOpacity: Double {
+        if isExpanded {
+            return showDetails ? 1.0 : 0.0
+        }
+
+        return 0.2
+    }
+
     private var isVSmuxSession: Bool {
         session.detailsSource == .vsmuxSessions
     }
@@ -697,7 +705,7 @@ private struct SessionRowView: View {
                     }
                 }
                 .frame(width: 34 * chromeScale, height: 34 * chromeScale)
-                .opacity(isExpanded ? 1.0 : 0.2)
+                .opacity(statusIndicatorOpacity)
 
                 VStack(alignment: .leading, spacing: 3 * chromeScale) {
                     HStack(spacing: 6 * chromeScale) {
