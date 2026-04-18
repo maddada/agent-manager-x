@@ -1057,11 +1057,11 @@ final class AppStore: ObservableObject {
         let sessions = workspaces
             .flatMap { workspace in
                 workspace.sessions.map { session in
-                    Session(
+                    return Session(
                         id: session.sessionId,
                         agentType: mapVSmuxAgentType(session.agent),
-                        projectName: workspace.workspaceName,
-                        projectPath: workspace.workspacePath,
+                        projectName: session.resolvedProjectName(fallback: workspace.workspaceName),
+                        projectPath: session.resolvedProjectPath(fallback: workspace.workspacePath),
                         gitBranch: nil,
                         githubUrl: nil,
                         status: mapVSmuxStatus(session.status),

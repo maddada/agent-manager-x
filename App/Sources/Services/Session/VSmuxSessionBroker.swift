@@ -12,10 +12,24 @@ struct VSmuxWorkspaceSession: Codable, Hashable {
     let isVisible: Bool
     let kind: String
     let lastActiveAt: String
+    let projectName: String?
+    let projectPath: String?
     let sessionId: String
     let status: String
     let terminalTitle: String?
     let threadId: String?
+
+    // Newer VSmux publishers send project metadata per session. Fall back to
+    // the workspace values so older publishers still decode and behave.
+    func resolvedProjectName(fallback workspaceName: String) -> String {
+        let trimmedProjectName = projectName?.trimmingCharacters(in: .whitespacesAndNewlines)
+        return (trimmedProjectName?.isEmpty == false ? trimmedProjectName : nil) ?? workspaceName
+    }
+
+    func resolvedProjectPath(fallback workspacePath: String) -> String {
+        let trimmedProjectPath = projectPath?.trimmingCharacters(in: .whitespacesAndNewlines)
+        return (trimmedProjectPath?.isEmpty == false ? trimmedProjectPath : nil) ?? workspacePath
+    }
 }
 
 struct VSmuxWorkspaceSnapshot: Codable, Hashable, Identifiable {

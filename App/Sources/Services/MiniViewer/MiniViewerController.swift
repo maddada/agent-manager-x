@@ -474,8 +474,8 @@ final class MiniViewerController {
             }
 
             if !protectedOverflowSessions.isEmpty {
-                let visibleSessionIDs = Set(visibleSessions.map(\.id))
-                for session in protectedOverflowSessions where !visibleSessionIDs.contains(session.id) {
+                let visibleSessionIDs = Set(visibleSessions.map(\.renderID))
+                for session in protectedOverflowSessions where !visibleSessionIDs.contains(session.renderID) {
                     visibleSessions.append(session)
                 }
             }
@@ -521,22 +521,22 @@ final class MiniViewerController {
         }
 
         var selectedSessions = guaranteedSessionsByProject.values.sorted(by: areSessionsOrderedForMiniViewerVisibility)
-        let guaranteedSessionIDs = Set(selectedSessions.map(\.id))
+        let guaranteedSessionIDs = Set(selectedSessions.map(\.renderID))
         let overflowSessionLimit = miniViewerOverflowSessionLimit()
 
         let protectedSessions = visibleSessions
-            .filter { isOverflowProtectedMiniViewerSession($0) && !guaranteedSessionIDs.contains($0.id) }
+            .filter { isOverflowProtectedMiniViewerSession($0) && !guaranteedSessionIDs.contains($0.renderID) }
             .sorted(by: areSessionsOrderedForMiniViewerVisibility)
         let protectedSessionBudget = max(0, overflowSessionLimit - selectedSessions.count)
         if protectedSessionBudget > 0 {
             selectedSessions.append(contentsOf: protectedSessions.prefix(protectedSessionBudget))
         }
 
-        let selectedSessionIDs = Set(selectedSessions.map(\.id))
+        let selectedSessionIDs = Set(selectedSessions.map(\.renderID))
 
         if selectedSessions.count < maxSessions {
             let additionalSessions = visibleSessions
-                .filter { !selectedSessionIDs.contains($0.id) && !isOverflowProtectedMiniViewerSession($0) }
+                .filter { !selectedSessionIDs.contains($0.renderID) && !isOverflowProtectedMiniViewerSession($0) }
                 .sorted(by: areSessionsOrderedForMiniViewerVisibility)
 
             selectedSessions.append(contentsOf: additionalSessions.prefix(maxSessions - selectedSessions.count))
@@ -644,8 +644,8 @@ final class MiniViewerController {
             return lhsDate > rhsDate
         }
 
-        if lhs.id != rhs.id {
-            return lhs.id < rhs.id
+        if lhs.renderID != rhs.renderID {
+            return lhs.renderID < rhs.renderID
         }
 
         return lhs.pid < rhs.pid
@@ -985,7 +985,7 @@ private struct MiniViewerSessionPayload: Codable {
     let vsmuxWorkspaceID: String?
 
     init(from session: Session) {
-        id = "\(session.projectName)::\(session.id)"
+        id = session.renderID
         agentType = session.agentType
         projectName = session.projectName
         projectPath = session.projectPath
