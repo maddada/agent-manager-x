@@ -207,6 +207,11 @@ private final class AgentIconProvider {
 }
 
 private final class ViewerModel: ObservableObject {
+    private let detailFadeAnimation = Animation.easeInOut(duration: 0.16)
+    private let geometryAnimation = Animation.easeInOut(duration: 0.14)
+    private let detailFadeDuration: TimeInterval = 0.16
+    private let geometryCollapseSafetyDelay: TimeInterval = 0.06
+
     @Published var side: ViewerSide = .right
     @Published var showOnActiveMonitor = false
     @Published var pinnedScreenTarget = "primary"
@@ -255,11 +260,11 @@ private final class ViewerModel: ObservableObject {
             let task = DispatchWorkItem { [weak self] in
                 guard let self else { return }
                 guard self.isPointerInside else { return }
-                withAnimation(.easeInOut(duration: 0.16)) {
-                    self.showDetails = true
-                }
-                withAnimation(.easeInOut(duration: 0.14)) {
+                withAnimation(self.geometryAnimation) {
                     self.isExpanded = true
+                }
+                withAnimation(self.detailFadeAnimation) {
+                    self.showDetails = true
                 }
             }
             expandTask = task
@@ -270,12 +275,22 @@ private final class ViewerModel: ObservableObject {
         let task = DispatchWorkItem { [weak self] in
             guard let self else { return }
             guard !self.isPointerInside else { return }
-            withAnimation(.easeInOut(duration: 0.12)) {
+            withAnimation(self.detailFadeAnimation) {
                 self.showDetails = false
             }
-            withAnimation(.easeInOut(duration: 0.14)) {
-                self.isExpanded = false
+
+            let collapseGeometryTask = DispatchWorkItem { [weak self] in
+                guard let self else { return }
+                guard !self.isPointerInside else { return }
+                withAnimation(self.geometryAnimation) {
+                    self.isExpanded = false
+                }
             }
+            self.collapseTask = collapseGeometryTask
+            DispatchQueue.main.asyncAfter(
+                deadline: .now() + self.detailFadeDuration + self.geometryCollapseSafetyDelay,
+                execute: collapseGeometryTask
+            )
         }
         collapseTask = task
         DispatchQueue.main.asyncAfter(deadline: .now() + collapseDelay, execute: task)
@@ -475,6 +490,7 @@ private struct SessionRowView: View {
     let isExpanded: Bool
     let showDetails: Bool
     let showProjectName: Bool
+    let keepFloatingIconVisibleWhenExpanded: Bool
     let agentImage: NSImage?
     let onActivate: () -> Void
     let onMiddleClick: () -> Void
@@ -487,6 +503,9 @@ private struct SessionRowView: View {
 
     private var statusIndicatorOpacity: Double {
         if isExpanded {
+            if keepFloatingIconVisibleWhenExpanded {
+                return 1.0
+            }
             return showDetails ? 1.0 : 0.0
         }
 
@@ -674,35 +693,34 @@ private struct SessionRowView: View {
                             }
                         )
 
-                    if showDetails {
-                        Group {
-                            if let agentImage {
-                                Group {
-                                    if session.agentType == .codex {
-                                        Image(nsImage: agentImage)
-                                            .renderingMode(.template)
-                                            .resizable()
-                                            .interpolation(.high)
-                                            .scaledToFit()
-                                            .frame(width: 12 * chromeScale, height: 12 * chromeScale)
-                                            .foregroundStyle(.primary)
-                                    } else {
-                                        Image(nsImage: agentImage)
-                                            .renderingMode(.original)
-                                            .resizable()
-                                            .interpolation(.high)
-                                            .scaledToFit()
-                                            .frame(width: 12 * chromeScale, height: 12 * chromeScale)
-                                    }
+                    Group {
+                        if let agentImage {
+                            Group {
+                                if session.agentType == .codex {
+                                    Image(nsImage: agentImage)
+                                        .renderingMode(.template)
+                                        .resizable()
+                                        .interpolation(.high)
+                                        .scaledToFit()
+                                        .frame(width: 12 * chromeScale, height: 12 * chromeScale)
+                                        .foregroundStyle(.primary)
+                                } else {
+                                    Image(nsImage: agentImage)
+                                        .renderingMode(.original)
+                                        .resizable()
+                                        .interpolation(.high)
+                                        .scaledToFit()
+                                        .frame(width: 12 * chromeScale, height: 12 * chromeScale)
                                 }
-                            } else {
-                                Image(systemName: "cpu.fill")
-                                    .miniViewerFont(size: 8, weight: .bold)
-                                    .foregroundStyle(baseTint)
                             }
+                        } else {
+                            Image(systemName: "cpu.fill")
+                                .miniViewerFont(size: 8, weight: .bold)
+                                .foregroundStyle(baseTint)
                         }
-                        .offset(x: 6 * chromeScale, y: 6 * chromeScale)
                     }
+                    .offset(x: 6 * chromeScale, y: 6 * chromeScale)
+                    .opacity(showDetails ? 1 : 0)
                 }
                 .frame(width: 34 * chromeScale, height: 34 * chromeScale)
                 .opacity(statusIndicatorOpacity)
@@ -758,20 +776,23 @@ private struct SessionRowView: View {
         }
         .padding(.horizontal, 8 * chromeScale)
         .frame(height: rowHeight)
-        .background(isExpanded ? AnyView(
+        .background(
             RoundedRectangle(cornerRadius: 12 * chromeScale)
                 .fill(.thinMaterial.opacity(0.8))
-        ) : AnyView(EmptyView()))
-        .overlay(isExpanded ? AnyView(
+                .opacity(showDetails ? 1 : 0)
+        )
+        .overlay(
             RoundedRectangle(cornerRadius: 12 * chromeScale)
                 .stroke(Color.white.opacity(0.2), lineWidth: 1)
-        ) : AnyView(EmptyView()))
+                .opacity(showDetails ? 1 : 0)
+        )
         .overlay(MiddleClickCatcher(onMiddleClick: onMiddleClick))
         .overlay(RightClickCatcher(onRightClick: onRightClick))
         .buttonStyle(.plain)
         .focusable(false)
         .miniViewerPointerCursor()
-        .animation(.easeInOut(duration: 0.16), value: isExpanded)
+        .animation(.easeInOut(duration: 0.16), value: showDetails)
+        .animation(.easeInOut(duration: 0.14), value: isExpanded)
     }
 }
 
@@ -882,6 +903,7 @@ private struct MiniViewerRootView: View {
                                 isExpanded: model.isExpanded,
                                 showDetails: model.showDetails,
                                 showProjectName: false,
+                                keepFloatingIconVisibleWhenExpanded: model.side == .left,
                                 agentImage: iconProvider.image(for: session.agentType),
                                 onActivate: { onActivate(session) },
                                 onMiddleClick: { onMiddleClick(session) },
