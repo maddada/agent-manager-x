@@ -2,6 +2,21 @@
 
 All notable changes to Agent Manager X will be documented in this file.
 
+## 2.3 - 2026-04-19
+
+### Added
+
+- Added support for per-session VSmux project metadata so sessions can keep their own resolved project name and path instead of inheriting only the workspace fallback.
+
+### Changed
+
+- Refined the mini viewer's expand and collapse choreography so geometry and detail fades transition more smoothly.
+- Kept the floating icon visible during left-side expansion and softened collapsed status indicators so the compact mini viewer is easier to scan without feeling visually harsh.
+
+### Fixed
+
+- Fixed mini viewer overflow protection and ordering to use stable render identities for sessions, preventing VSmux entries from colliding when multiple sessions share a project.
+
 ## 2.2 - 2026-04-17
 
 ### Added
