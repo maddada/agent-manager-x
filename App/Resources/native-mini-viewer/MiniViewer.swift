@@ -117,6 +117,7 @@ private struct MiniViewerSession: Codable, Identifiable {
 private struct MiniViewerProject: Codable, Identifiable {
     let projectName: String
     let projectPath: String
+    let projectIconDataUrl: String?
     let gitBranch: String?
     let diffAdditions: UInt64
     let diffDeletions: UInt64
@@ -203,6 +204,37 @@ private final class AgentIconProvider {
 
     func image(for type: AgentType) -> NSImage? {
         images[type]
+    }
+}
+
+private final class ProjectIconProvider {
+    private var images: [String: NSImage] = [:]
+
+    func image(for dataURL: String?) -> NSImage? {
+        guard let dataURL else {
+            return nil
+        }
+
+        if let cachedImage = images[dataURL] {
+            return cachedImage
+        }
+
+        guard let commaIndex = dataURL.firstIndex(of: ",") else {
+            return nil
+        }
+
+        let encodedData = String(dataURL[dataURL.index(after: commaIndex)...])
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard
+            let imageData = Data(base64Encoded: encodedData),
+            let image = NSImage(data: imageData)
+        else {
+            return nil
+        }
+
+        images[dataURL] = image
+        return image
     }
 }
 
@@ -800,6 +832,8 @@ private struct ProjectHeaderView: View {
     @Environment(\.miniViewerChromeScale) private var chromeScale
 
     let project: MiniViewerProject
+    let showDetails: Bool
+    let projectIcon: NSImage?
     private let headerFill = Color(red: 0.11, green: 0.13, blue: 0.16).opacity(0.85)
 
     private var branchName: String? {
@@ -814,63 +848,90 @@ private struct ProjectHeaderView: View {
         project.diffAdditions > 0 || project.diffDeletions > 0
     }
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 3 * chromeScale) {
-            HStack(spacing: 8 * chromeScale) {
-                HStack(spacing: 4 * chromeScale) {
-                    Text(project.projectName)
-                        .miniViewerFont(size: 12, weight: .semibold)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-
-                    Text("(\(project.sessions.count))")
-                        .miniViewerFont(size: 12, weight: .semibold)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-
-                Spacer(minLength: 6 * chromeScale)
-
-                HStack(spacing: 7 * chromeScale) {
-                    if let branchName {
-                        HStack(spacing: 3 * chromeScale) {
-                            Image(systemName: "point.topleft.down.curvedto.point.bottomright.up")
-                                .miniViewerFont(size: 9, weight: .medium)
-                            Text(branchName)
-                        }
-                    }
-
-                    if hasDiffStats {
-                        HStack(spacing: 4 * chromeScale) {
-                            Text("+\(project.diffAdditions)")
-                                .foregroundStyle(Color.green.opacity(0.9))
-                            Text("-\(project.diffDeletions)")
-                                .foregroundStyle(Color.red.opacity(0.9))
-                        }
-                    }
-                }
-                .lineLimit(1)
-                .fixedSize(horizontal: true, vertical: false)
-                .miniViewerFont(size: 9, design: .monospaced)
-                .foregroundStyle(.secondary)
-            }
+    private var fallbackFolderColor: Color {
+        let hash = project.projectPath.utf8.reduce(UInt64(5381)) { partial, byte in
+            ((partial << 5) &+ partial) &+ UInt64(byte)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 10 * chromeScale)
-        .padding(.top, 6 * chromeScale)
-        .padding(.bottom, 5 * chromeScale)
-        .background(
-            BottomRoundedRectangle(radius: 11 * chromeScale)
-                .fill(headerFill)
-        )
-        .overlay(
-            BottomRoundedRectangle(radius: 11 * chromeScale)
-                .stroke(Color.white.opacity(0.16), lineWidth: 1)
-        )
-        .overlay(alignment: .bottom) {
-            Rectangle()
-                .fill(Color.white.opacity(0.08))
-                .frame(height: 1)
+        let hue = Double(hash % 360) / 360.0
+        return Color(hue: hue, saturation: 0.28, brightness: 0.97)
+    }
+
+    var body: some View {
+        ZStack(alignment: .bottomLeading) {
+            VStack(alignment: .leading, spacing: 3 * chromeScale) {
+                HStack(spacing: 8 * chromeScale) {
+                    HStack(spacing: 4 * chromeScale) {
+                        Text(project.projectName)
+                            .miniViewerFont(size: 12, weight: .semibold)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+
+                        Text("(\(project.sessions.count))")
+                            .miniViewerFont(size: 12, weight: .semibold)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+
+                    Spacer(minLength: 6 * chromeScale)
+
+                    HStack(spacing: 7 * chromeScale) {
+                        if let branchName {
+                            HStack(spacing: 3 * chromeScale) {
+                                Image(systemName: "point.topleft.down.curvedto.point.bottomright.up")
+                                    .miniViewerFont(size: 9, weight: .medium)
+                                Text(branchName)
+                            }
+                        }
+
+                        if hasDiffStats {
+                            HStack(spacing: 4 * chromeScale) {
+                                Text("+\(project.diffAdditions)")
+                                    .foregroundStyle(Color.green.opacity(0.9))
+                                Text("-\(project.diffDeletions)")
+                                    .foregroundStyle(Color.red.opacity(0.9))
+                            }
+                        }
+                    }
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+                    .miniViewerFont(size: 9, design: .monospaced)
+                    .foregroundStyle(.secondary)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 10 * chromeScale)
+            .padding(.top, 6 * chromeScale)
+            .padding(.bottom, 5 * chromeScale)
+            .background(
+                BottomRoundedRectangle(radius: 11 * chromeScale)
+                    .fill(headerFill)
+            )
+            .overlay(
+                BottomRoundedRectangle(radius: 11 * chromeScale)
+                    .stroke(Color.white.opacity(0.16), lineWidth: 1)
+            )
+            .overlay(alignment: .bottom) {
+                Rectangle()
+                    .fill(Color.white.opacity(0.08))
+                    .frame(height: 1)
+            }
+            .opacity(showDetails ? 1 : 0)
+
+            Group {
+                if let projectIcon {
+                    Image(nsImage: projectIcon)
+                        .resizable()
+                        .interpolation(.high)
+                        .scaledToFit()
+                } else {
+                    Image(systemName: "folder.fill")
+                        .miniViewerFont(size: 14, weight: .semibold)
+                        .foregroundStyle(fallbackFolderColor)
+                }
+            }
+            .frame(width: 20 * chromeScale, height: 20 * chromeScale)
+            .offset(x: 7 * chromeScale, y: -5 * chromeScale)
+            .opacity(showDetails ? 0 : 0.5)
         }
         .padding(.horizontal, 8 * chromeScale)
     }
@@ -879,6 +940,7 @@ private struct ProjectHeaderView: View {
 private struct MiniViewerRootView: View {
     @ObservedObject var model: ViewerModel
     let iconProvider: AgentIconProvider
+    let projectIconProvider: ProjectIconProvider
     let onActivate: (MiniViewerSession) -> Void
     let onMiddleClick: (MiniViewerSession) -> Void
     let onRightClick: (MiniViewerSession) -> Void
@@ -893,9 +955,12 @@ private struct MiniViewerRootView: View {
             VStack(spacing: 8 * chromeScale) {
                 ForEach(model.projects) { project in
                     VStack(alignment: .leading, spacing: 6 * chromeScale) {
-                        ProjectHeaderView(project: project)
-                            .opacity(model.showDetails ? 1 : 0)
-                            .animation(.easeInOut(duration: 0.16), value: model.showDetails)
+                        ProjectHeaderView(
+                            project: project,
+                            showDetails: model.showDetails,
+                            projectIcon: projectIconProvider.image(for: project.projectIconDataUrl)
+                        )
+                        .animation(.easeInOut(duration: 0.16), value: model.showDetails)
 
                         ForEach(project.sessions) { session in
                             SessionRowView(
@@ -928,6 +993,7 @@ private struct MiniViewerRootView: View {
 final class MiniViewerAppDelegate: NSObject, NSApplicationDelegate {
     private let model = ViewerModel()
     private let iconProvider = AgentIconProvider()
+    private let projectIconProvider = ProjectIconProvider()
     private var window: NSPanel?
     private var cancellables = Set<AnyCancellable>()
     private var hoverTimer: Timer?
@@ -984,6 +1050,7 @@ final class MiniViewerAppDelegate: NSObject, NSApplicationDelegate {
             rootView: MiniViewerRootView(
                 model: model,
                 iconProvider: iconProvider,
+                projectIconProvider: projectIconProvider,
                 onActivate: { [weak self] session in
                     self?.activateSession(session)
                 },
