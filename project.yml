@@ -28,8 +28,8 @@ targets:
         INFOPLIST_KEY_CFBundleDisplayName: "Agent Manager X"
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.productivity
         INFOPLIST_KEY_NSHumanReadableCopyright: "Copyright (c) 2026"
-        MARKETING_VERSION: 2.3
-        CURRENT_PROJECT_VERSION: 7
+        MARKETING_VERSION: 2.4
+        CURRENT_PROJECT_VERSION: 8
 schemes:
   AgentManagerX:
     build:

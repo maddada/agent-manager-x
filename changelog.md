@@ -2,6 +2,17 @@
 
 All notable changes to Agent Manager X will be documented in this file.
 
+## 2.4 - 2026-04-20
+
+### Added
+
+- Added VSmux workspace favicon propagation so project icon data can travel from workspace snapshots into session records and mini viewer payloads.
+- Added project icon rendering to collapsed mini viewer project headers, with a deterministic folder-color fallback when no icon is available.
+
+### Changed
+
+- Refined the collapsed mini viewer header treatment so project identity stays visible before the full detail header fades in.
+
 ## 2.3 - 2026-04-19
 
 ### Added

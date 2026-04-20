@@ -25,11 +25,11 @@ See [changelog.md](./changelog.md) for release notes and version history.
 
 ---
 
-## Latest in 2.3
+## Latest in 2.4
 
-- Preserved per-session VSmux project identity so sessions from the same workspace can still show the correct project name and path in the app and mini viewer.
-- Softened collapsed mini viewer status indicators and refined the expand/collapse animation timing so the floating sidebar feels smoother and less jumpy.
-- Kept the left-side floating icon visible during expansion while details fade in, making the mini viewer easier to track visually.
+- Added VSmux workspace favicon propagation so project icon data can flow from workspace snapshots into the app's session model.
+- Updated the mini viewer payloads and collapsed project headers to show project icons when available, with a colored folder fallback when they are not.
+- Kept the collapsed mini viewer more glanceable by surfacing project identity even before the full project header details fade in.
 
 ---
 
@@ -62,7 +62,7 @@ https://youtube.com/watch?v=5LRAKaYJXjw
 - View all active coding agent sessions in one place
 - Real-time status detection (Thinking, Processing, Waiting, Idle)
 - Global hotkey to toggle visibility (default: `Ctrl+Space`, configurable, I personally use ctrl+shift+cmd+s)
-- Mini floating display mode with per-monitor pinning, session caps, smarter recent-session filtering, configurable expand and collapse delays, whole-card hover support, smoother staged animations, and quick project switching
+- Mini floating display mode with per-monitor pinning, session caps, smarter recent-session filtering, configurable expand and collapse delays, whole-card hover support, smoother staged animations, project icons, and quick project switching
 - Configurable run, build, commit, and push buttons for each project
 - Reliably shows current progress and status of all sessions
 - Shows CPU and RAM consumption for all sessions and lets you close stale sessions with one click to save resources
@@ -76,7 +76,7 @@ https://youtube.com/watch?v=5LRAKaYJXjw
 - Themes and background image support
 - Close buttons for a project's sessions, for all from a specific agent, for all stale sessions, etc.
 - Added fading and sorting based on the last activity on each session (5 mins = idle, 10 minutes = stale)
-- Supports both process-based session discovery and VSmux-backed session views, including protected active overflow sessions, per-session project identity, and filtering for blank root Claude placeholders
+- Supports both process-based session discovery and VSmux-backed session views, including protected active overflow sessions, per-session project identity, workspace favicon propagation, and filtering for blank root Claude placeholders
 
 Please ask or do a PR if you have any feature ideas!
 
