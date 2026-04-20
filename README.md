@@ -25,11 +25,11 @@ See [changelog.md](./changelog.md) for release notes and version history.
 
 ---
 
-## Latest in 2.4
+## Latest in 2.5
 
-- Added VSmux workspace favicon propagation so project icon data can flow from workspace snapshots into the app's session model.
-- Updated the mini viewer payloads and collapsed project headers to show project icons when available, with a colored folder fallback when they are not.
-- Kept the collapsed mini viewer more glanceable by surfacing project identity even before the full project header details fade in.
+- Refined the expanded mini viewer row layout so the agent icon and status indicator can swap positions on the right-side sidebar, keeping the expanded view easier to scan.
+- Tightened whole-card hover handling so expanded hoverable areas track the actual row cards instead of the entire panel bounds.
+- Synced the bundled mini viewer resources with the latest project icon and expanded-row presentation updates.
 
 ---
 
@@ -62,7 +62,7 @@ https://youtube.com/watch?v=5LRAKaYJXjw
 - View all active coding agent sessions in one place
 - Real-time status detection (Thinking, Processing, Waiting, Idle)
 - Global hotkey to toggle visibility (default: `Ctrl+Space`, configurable, I personally use ctrl+shift+cmd+s)
-- Mini floating display mode with per-monitor pinning, session caps, smarter recent-session filtering, configurable expand and collapse delays, whole-card hover support, smoother staged animations, project icons, and quick project switching
+- Mini floating display mode with per-monitor pinning, session caps, smarter recent-session filtering, configurable expand and collapse delays, smarter whole-card hover zones, smoother staged animations, project icons, and quick project switching
 - Configurable run, build, commit, and push buttons for each project
 - Reliably shows current progress and status of all sessions
 - Shows CPU and RAM consumption for all sessions and lets you close stale sessions with one click to save resources

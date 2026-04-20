@@ -2,6 +2,14 @@
 
 All notable changes to Agent Manager X will be documented in this file.
 
+## 2.5 - 2026-04-21
+
+### Changed
+
+- Refined the expanded mini viewer row layout so the agent icon and status indicator can swap positions on the right-side sidebar.
+- Tightened whole-card hover handling so expanded hoverable areas follow the visible row cards instead of the full panel frame.
+- Synced the bundled mini viewer resources with the latest expanded-row icon layout and project icon behavior.
+
 ## 2.4 - 2026-04-20
 
 ### Added
