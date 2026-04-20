@@ -121,6 +121,7 @@ private struct MiniViewerSession: Codable, Identifiable {
 private struct MiniViewerProject: Codable, Identifiable {
     let projectName: String
     let projectPath: String
+    let projectIconDataUrl: String?
     let gitBranch: String?
     let diffAdditions: UInt64
     let diffDeletions: UInt64
@@ -1317,6 +1318,7 @@ let app = NSApplication.shared
 let delegate = MiniViewerAppDelegate()
 app.delegate = delegate
 app.run()
+
 """#
 
     static let icons: [String: String] = [

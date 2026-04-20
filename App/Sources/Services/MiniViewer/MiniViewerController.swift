@@ -561,6 +561,7 @@ final class MiniViewerController {
                     MiniViewerProjectPayload(
                         projectName: miniSession.projectName,
                         projectPath: projectPath,
+                        projectIconDataUrl: session.projectIconDataUrl,
                         gitBranch: branch,
                         diffAdditions: 0,
                         diffDeletions: 0,
@@ -572,6 +573,9 @@ final class MiniViewerController {
 
             if projects[projectIndex].gitBranch == nil {
                 projects[projectIndex].gitBranch = branch
+            }
+            if projects[projectIndex].projectIconDataUrl == nil {
+                projects[projectIndex].projectIconDataUrl = session.projectIconDataUrl
             }
 
             projects[projectIndex].sessions.append(miniSession)
@@ -1006,6 +1010,7 @@ private struct MiniViewerSessionPayload: Codable {
 private struct MiniViewerProjectPayload: Codable {
     let projectName: String
     let projectPath: String
+    var projectIconDataUrl: String?
     var gitBranch: String?
     var diffAdditions: Int
     var diffDeletions: Int
