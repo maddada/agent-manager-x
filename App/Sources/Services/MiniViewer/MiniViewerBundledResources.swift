@@ -211,6 +211,37 @@ private final class AgentIconProvider {
     }
 }
 
+private final class ProjectIconProvider {
+    private var images: [String: NSImage] = [:]
+
+    func image(for dataURL: String?) -> NSImage? {
+        guard let dataURL else {
+            return nil
+        }
+
+        if let cachedImage = images[dataURL] {
+            return cachedImage
+        }
+
+        guard let commaIndex = dataURL.firstIndex(of: ",") else {
+            return nil
+        }
+
+        let encodedData = String(dataURL[dataURL.index(after: commaIndex)...])
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard
+            let imageData = Data(base64Encoded: encodedData),
+            let image = NSImage(data: imageData)
+        else {
+            return nil
+        }
+
+        images[dataURL] = image
+        return image
+    }
+}
+
 private final class ViewerModel: ObservableObject {
     private let detailFadeAnimation = Animation.easeInOut(duration: 0.16)
     private let geometryAnimation = Animation.easeInOut(duration: 0.14)
@@ -496,6 +527,7 @@ private struct SessionRowView: View {
     let showDetails: Bool
     let showProjectName: Bool
     let keepFloatingIconVisibleWhenExpanded: Bool
+    let swapAgentIconWithStatusIcon: Bool
     let agentImage: NSImage?
     let onActivate: () -> Void
     let onMiddleClick: () -> Void
@@ -504,6 +536,30 @@ private struct SessionRowView: View {
 
     private var rowHeight: CGFloat {
         56 * chromeScale
+    }
+
+    private var trailingAgentIconSize: CGFloat {
+        16.8 * chromeScale
+    }
+
+    private var statusIndicatorSize: CGFloat {
+        20 * chromeScale
+    }
+
+    private var leadingIconSlotSize: CGFloat {
+        34 * chromeScale
+    }
+
+    private var trailingIconSlotWidth: CGFloat {
+        swapAgentIconWithStatusIcon ? statusIndicatorSize : trailingAgentIconSize
+    }
+
+    private var trailingIconOffsetX: CGFloat {
+        -9
+    }
+
+    private var shouldSwapExpandedIcons: Bool {
+        swapAgentIconWithStatusIcon && isExpanded
     }
 
     private var statusIndicatorOpacity: Double {
@@ -683,51 +739,56 @@ private struct SessionRowView: View {
         }
     }
 
+    @ViewBuilder
+    private var agentIcon: some View {
+        if let agentImage {
+            if session.agentType == .codex {
+                Image(nsImage: agentImage)
+                    .renderingMode(.template)
+                    .resizable()
+                    .interpolation(.high)
+                    .scaledToFit()
+                    .frame(width: trailingAgentIconSize, height: trailingAgentIconSize)
+                    .foregroundStyle(.primary)
+            } else {
+                Image(nsImage: agentImage)
+                    .renderingMode(.original)
+                    .resizable()
+                    .interpolation(.high)
+                    .scaledToFit()
+                    .frame(width: trailingAgentIconSize, height: trailingAgentIconSize)
+            }
+        } else {
+            Image(systemName: "cpu.fill")
+                .miniViewerFont(size: 11, weight: .bold)
+                .foregroundStyle(baseTint)
+        }
+    }
+
+    private var statusIndicator: some View {
+        largeStatusIndicator
+            .frame(width: statusIndicatorSize, height: statusIndicatorSize)
+    }
+
     var body: some View {
         Button(action: onActivate) {
             HStack(alignment: .center, spacing: 10 * chromeScale) {
-                ZStack(alignment: .bottomTrailing) {
-                    largeStatusIndicator
-                        .frame(width: 20 * chromeScale, height: 20 * chromeScale)
-                        .background(
-                            GeometryReader { proxy in
-                                Color.clear.preference(
-                                    key: SessionIconFramePreferenceKey.self,
-                                    value: [session.id: proxy.frame(in: .named("MiniViewerRoot"))]
-                                )
-                            }
-                        )
-
-                    Group {
-                        if let agentImage {
-                            Group {
-                                if session.agentType == .codex {
-                                    Image(nsImage: agentImage)
-                                        .renderingMode(.template)
-                                        .resizable()
-                                        .interpolation(.high)
-                                        .scaledToFit()
-                                        .frame(width: 12 * chromeScale, height: 12 * chromeScale)
-                                        .foregroundStyle(.primary)
-                                } else {
-                                    Image(nsImage: agentImage)
-                                        .renderingMode(.original)
-                                        .resizable()
-                                        .interpolation(.high)
-                                        .scaledToFit()
-                                        .frame(width: 12 * chromeScale, height: 12 * chromeScale)
-                                }
-                            }
-                        } else {
-                            Image(systemName: "cpu.fill")
-                                .miniViewerFont(size: 8, weight: .bold)
-                                .foregroundStyle(baseTint)
-                        }
+                ZStack {
+                    if shouldSwapExpandedIcons {
+                        agentIcon
+                    } else {
+                        statusIndicator
                     }
-                    .offset(x: 6 * chromeScale, y: 6 * chromeScale)
-                    .opacity(showDetails ? 1 : 0)
                 }
-                .frame(width: 34 * chromeScale, height: 34 * chromeScale)
+                .frame(width: leadingIconSlotSize, height: leadingIconSlotSize)
+                .background(
+                    GeometryReader { proxy in
+                        Color.clear.preference(
+                            key: SessionIconFramePreferenceKey.self,
+                            value: [session.id: proxy.frame(in: .named("MiniViewerRoot"))]
+                        )
+                    }
+                )
                 .opacity(statusIndicatorOpacity)
 
                 VStack(alignment: .leading, spacing: 3 * chromeScale) {
@@ -776,6 +837,17 @@ private struct SessionRowView: View {
                 .opacity(showDetails ? 1 : 0)
 
                 Spacer(minLength: 0)
+
+                Group {
+                    if shouldSwapExpandedIcons {
+                        statusIndicator
+                    } else {
+                        agentIcon
+                    }
+                }
+                    .frame(width: trailingIconSlotWidth, height: rowHeight, alignment: .center)
+                    .offset(x: trailingIconOffsetX)
+                    .opacity(showDetails ? 1 : 0)
             }
             .contentShape(Rectangle())
         }
@@ -805,6 +877,9 @@ private struct ProjectHeaderView: View {
     @Environment(\.miniViewerChromeScale) private var chromeScale
 
     let project: MiniViewerProject
+    let isExpanded: Bool
+    let showDetails: Bool
+    let projectIcon: NSImage?
     private let headerFill = Color(red: 0.11, green: 0.13, blue: 0.16).opacity(0.85)
 
     private var branchName: String? {
@@ -819,71 +894,101 @@ private struct ProjectHeaderView: View {
         project.diffAdditions > 0 || project.diffDeletions > 0
     }
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 3 * chromeScale) {
-            HStack(spacing: 8 * chromeScale) {
-                HStack(spacing: 4 * chromeScale) {
-                    Text(project.projectName)
-                        .miniViewerFont(size: 12, weight: .semibold)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-
-                    Text("(\(project.sessions.count))")
-                        .miniViewerFont(size: 12, weight: .semibold)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-
-                Spacer(minLength: 6 * chromeScale)
-
-                HStack(spacing: 7 * chromeScale) {
-                    if let branchName {
-                        HStack(spacing: 3 * chromeScale) {
-                            Image(systemName: "point.topleft.down.curvedto.point.bottomright.up")
-                                .miniViewerFont(size: 9, weight: .medium)
-                            Text(branchName)
-                        }
-                    }
-
-                    if hasDiffStats {
-                        HStack(spacing: 4 * chromeScale) {
-                            Text("+\(project.diffAdditions)")
-                                .foregroundStyle(Color.green.opacity(0.9))
-                            Text("-\(project.diffDeletions)")
-                                .foregroundStyle(Color.red.opacity(0.9))
-                        }
-                    }
-                }
-                .lineLimit(1)
-                .fixedSize(horizontal: true, vertical: false)
-                .miniViewerFont(size: 9, design: .monospaced)
-                .foregroundStyle(.secondary)
-            }
+    private var fallbackFolderColor: Color {
+        let hash = project.projectPath.utf8.reduce(UInt64(5381)) { partial, byte in
+            ((partial << 5) &+ partial) &+ UInt64(byte)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 10 * chromeScale)
-        .padding(.top, 6 * chromeScale)
-        .padding(.bottom, 5 * chromeScale)
-        .background(
-            BottomRoundedRectangle(radius: 11 * chromeScale)
-                .fill(headerFill)
-        )
-        .overlay(
-            BottomRoundedRectangle(radius: 11 * chromeScale)
-                .stroke(Color.white.opacity(0.16), lineWidth: 1)
-        )
-        .overlay(alignment: .bottom) {
-            Rectangle()
-                .fill(Color.white.opacity(0.08))
-                .frame(height: 1)
+        let hue = Double(hash % 360) / 360.0
+        return Color(hue: hue, saturation: 0.28, brightness: 0.97)
+    }
+
+    var body: some View {
+        ZStack(alignment: .bottomLeading) {
+            VStack(alignment: .leading, spacing: 3 * chromeScale) {
+                HStack(spacing: 8 * chromeScale) {
+                    HStack(spacing: 4 * chromeScale) {
+                        Text(project.projectName)
+                            .miniViewerFont(size: 12, weight: .semibold)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+
+                        Text("(\(project.sessions.count))")
+                            .miniViewerFont(size: 12, weight: .semibold)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                        }
+
+                    Spacer(minLength: 6 * chromeScale)
+
+                    HStack(spacing: 7 * chromeScale) {
+                        if let branchName {
+                            HStack(spacing: 3 * chromeScale) {
+                                Image(systemName: "point.topleft.down.curvedto.point.bottomright.up")
+                                    .miniViewerFont(size: 9, weight: .medium)
+                                Text(branchName)
+                            }
+                        }
+
+                        if hasDiffStats {
+                            HStack(spacing: 4 * chromeScale) {
+                                Text("+\(project.diffAdditions)")
+                                    .foregroundStyle(Color.green.opacity(0.9))
+                                Text("-\(project.diffDeletions)")
+                                    .foregroundStyle(Color.red.opacity(0.9))
+                            }
+                        }
+                    }
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+                    .miniViewerFont(size: 9, design: .monospaced)
+                    .foregroundStyle(.secondary)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 10 * chromeScale)
+            .padding(.top, 6 * chromeScale)
+            .padding(.bottom, 5 * chromeScale)
+            .background(
+                BottomRoundedRectangle(radius: 11 * chromeScale)
+                    .fill(headerFill)
+            )
+            .overlay(
+                BottomRoundedRectangle(radius: 11 * chromeScale)
+                    .stroke(Color.white.opacity(0.16), lineWidth: 1)
+            )
+            .overlay(alignment: .bottom) {
+                Rectangle()
+                    .fill(Color.white.opacity(0.08))
+                    .frame(height: 1)
+            }
+            .opacity(showDetails ? 1 : 0)
+
+            Group {
+                if let projectIcon {
+                    Image(nsImage: projectIcon)
+                        .resizable()
+                        .interpolation(.high)
+                        .scaledToFit()
+                } else {
+                    Image(systemName: "folder.fill")
+                        .miniViewerFont(size: 14, weight: .semibold)
+                        .foregroundStyle(fallbackFolderColor)
+                }
+            }
+            .frame(width: 20 * chromeScale, height: 20 * chromeScale)
+            .offset(x: 7 * chromeScale, y: -5 * chromeScale)
+            .opacity(isExpanded ? 0 : 0.5)
+            .zIndex(1)
         }
         .padding(.horizontal, 8 * chromeScale)
+        .zIndex(1)
     }
 }
 
 private struct MiniViewerRootView: View {
     @ObservedObject var model: ViewerModel
     let iconProvider: AgentIconProvider
+    let projectIconProvider: ProjectIconProvider
     let onActivate: (MiniViewerSession) -> Void
     let onMiddleClick: (MiniViewerSession) -> Void
     let onRightClick: (MiniViewerSession) -> Void
@@ -898,8 +1003,12 @@ private struct MiniViewerRootView: View {
             VStack(spacing: 8 * chromeScale) {
                 ForEach(model.projects) { project in
                     VStack(alignment: .leading, spacing: 6 * chromeScale) {
-                        ProjectHeaderView(project: project)
-                            .opacity(model.showDetails ? 1 : 0)
+                        ProjectHeaderView(
+                            project: project,
+                            isExpanded: model.isExpanded,
+                            showDetails: model.showDetails,
+                            projectIcon: projectIconProvider.image(for: project.projectIconDataUrl)
+                        )
                             .animation(.easeInOut(duration: 0.16), value: model.showDetails)
 
                         ForEach(project.sessions) { session in
@@ -909,6 +1018,7 @@ private struct MiniViewerRootView: View {
                                 showDetails: model.showDetails,
                                 showProjectName: false,
                                 keepFloatingIconVisibleWhenExpanded: model.side == .left,
+                                swapAgentIconWithStatusIcon: model.side == .right,
                                 agentImage: iconProvider.image(for: session.agentType),
                                 onActivate: { onActivate(session) },
                                 onMiddleClick: { onMiddleClick(session) },
@@ -933,6 +1043,7 @@ private struct MiniViewerRootView: View {
 final class MiniViewerAppDelegate: NSObject, NSApplicationDelegate {
     private let model = ViewerModel()
     private let iconProvider = AgentIconProvider()
+    private let projectIconProvider = ProjectIconProvider()
     private var window: NSPanel?
     private var cancellables = Set<AnyCancellable>()
     private var hoverTimer: Timer?
@@ -989,6 +1100,7 @@ final class MiniViewerAppDelegate: NSObject, NSApplicationDelegate {
             rootView: MiniViewerRootView(
                 model: model,
                 iconProvider: iconProvider,
+                projectIconProvider: projectIconProvider,
                 onActivate: { [weak self] session in
                     self?.activateSession(session)
                 },
@@ -1227,8 +1339,27 @@ final class MiniViewerAppDelegate: NSObject, NSApplicationDelegate {
             rightCollapsedAnchorRects.contains(where: { $0.contains(pointer) }) ||
             liveHoverStripRect?.contains(pointer) == true ||
             rightCollapsedHoverStripRect?.contains(pointer) == true
-        let hoveringExpandedCard = model.makeWholeCardHoverable && model.isExpanded && panel.frame.contains(pointer)
+        let expandedCardRects = expandedCardRects(for: liveIconRects, panelFrame: panel.frame)
+        let hoveringExpandedCard = model.makeWholeCardHoverable &&
+            model.isExpanded &&
+            expandedCardRects.contains(where: { $0.contains(pointer) })
         model.setHovering(hoveringIcon || hoveringExpandedCard)
+    }
+
+    private func expandedCardRects(for iconRects: [NSRect], panelFrame: NSRect) -> [NSRect] {
+        guard model.isExpanded else { return [] }
+
+        let cardInset = 8 * chromeScale
+        let cardWidth = max(panelFrame.width - (cardInset * 2), 0)
+
+        return iconRects.map { rect in
+            NSRect(
+                x: panelFrame.minX + cardInset,
+                y: rect.midY - (rowHeight / 2),
+                width: cardWidth,
+                height: rowHeight
+            )
+        }
     }
 
     private func hoverStripRect(for iconRects: [NSRect]) -> NSRect? {
