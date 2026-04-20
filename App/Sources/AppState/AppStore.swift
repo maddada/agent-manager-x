@@ -1076,6 +1076,7 @@ final class AppStore: ObservableObject {
                         detailsSource: .vsmuxSessions,
                         vsmuxWorkspaceID: workspace.workspaceId,
                         vsmuxThreadID: session.threadId,
+                        projectIconDataUrl: workspace.workspaceFaviconDataUrl,
                         sessionFilePath: nil
                     )
                 }

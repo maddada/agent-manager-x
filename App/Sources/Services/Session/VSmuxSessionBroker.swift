@@ -35,6 +35,7 @@ struct VSmuxWorkspaceSession: Codable, Hashable {
 struct VSmuxWorkspaceSnapshot: Codable, Hashable, Identifiable {
     let sessions: [VSmuxWorkspaceSession]
     let updatedAt: String
+    let workspaceFaviconDataUrl: String?
     let workspaceId: String
     let workspaceName: String
     let workspacePath: String
@@ -48,6 +49,7 @@ private struct VSmuxWorkspaceSnapshotEnvelope: Codable {
     let sessions: [VSmuxWorkspaceSession]
     let type: String
     let updatedAt: String
+    let workspaceFaviconDataUrl: String?
     let workspaceId: String
     let workspaceName: String
     let workspacePath: String
@@ -216,6 +218,7 @@ final class VSmuxSessionBroker {
         let snapshot = VSmuxWorkspaceSnapshot(
             sessions: envelope.sessions,
             updatedAt: envelope.updatedAt,
+            workspaceFaviconDataUrl: envelope.workspaceFaviconDataUrl,
             workspaceId: envelope.workspaceId,
             workspaceName: envelope.workspaceName,
             workspacePath: envelope.workspacePath

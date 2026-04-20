@@ -45,6 +45,7 @@ struct Session: Codable, Hashable, Identifiable {
     var detailsSource: SessionDetailsSource = .processBased
     var vsmuxWorkspaceID: String? = nil
     var vsmuxThreadID: String? = nil
+    var projectIconDataUrl: String? = nil
     var sessionFilePath: String? = nil
 
     /// Render-safe identity for UI lists where logical `id` may repeat across processes.
