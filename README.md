@@ -25,11 +25,12 @@ See [changelog.md](./changelog.md) for release notes and version history.
 
 ---
 
-## Latest in 2.5
+## Latest in 2.6
 
-- Refined the expanded mini viewer row layout so the agent icon and status indicator can swap positions on the right-side sidebar, keeping the expanded view easier to scan.
-- Tightened whole-card hover handling so expanded hoverable areas track the actual row cards instead of the entire panel bounds.
-- Synced the bundled mini viewer resources with the latest project icon and expanded-row presentation updates.
+- Added Sparkle update support with signed appcasts, automatic checks, and a manual "Check for Updates..." command.
+- Added an App Updates settings section for update status, current version, last check time, and automatic check controls.
+- Added zmux session support alongside vsmux, with source-aware focus behavior and clearer dashboard labels.
+- Refined mini viewer sizing and hover tracking so the floating sidebar stays aligned to visible session content.
 
 ---
 
@@ -63,6 +64,7 @@ https://youtube.com/watch?v=5LRAKaYJXjw
 - Real-time status detection (Thinking, Processing, Waiting, Idle)
 - Global hotkey to toggle visibility (default: `Ctrl+Space`, configurable, I personally use ctrl+shift+cmd+s)
 - Mini floating display mode with per-monitor pinning, session caps, smarter recent-session filtering, configurable expand and collapse delays, smarter whole-card hover zones, smoother staged animations, project icons, and quick project switching
+- Sparkle-powered automatic updates with signed appcasts for Apple Silicon and Intel builds
 - Configurable run, build, commit, and push buttons for each project
 - Reliably shows current progress and status of all sessions
 - Shows CPU and RAM consumption for all sessions and lets you close stale sessions with one click to save resources
@@ -76,7 +78,7 @@ https://youtube.com/watch?v=5LRAKaYJXjw
 - Themes and background image support
 - Close buttons for a project's sessions, for all from a specific agent, for all stale sessions, etc.
 - Added fading and sorting based on the last activity on each session (5 mins = idle, 10 minutes = stale)
-- Supports both process-based session discovery and VSmux-backed session views, including protected active overflow sessions, per-session project identity, workspace favicon propagation, and filtering for blank root Claude placeholders
+- Supports process-based session discovery plus vsmux / zmux-backed session views, including protected active overflow sessions, per-session project identity, workspace favicon propagation, and filtering for blank root Claude placeholders
 
 Please ask or do a PR if you have any feature ideas!
 
