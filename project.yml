@@ -46,11 +46,17 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.madda.agentmanagerx
         PRODUCT_NAME: "Agent Manager X"
         GENERATE_INFOPLIST_FILE: YES
+        CODE_SIGN_IDENTITY: "Developer ID Application"
+        CODE_SIGN_INJECT_BASE_ENTITLEMENTS: NO
+        CODE_SIGN_STYLE: Manual
+        DEVELOPMENT_TEAM: KTKP595G3B
+        ENABLE_HARDENED_RUNTIME: YES
+        OTHER_CODE_SIGN_FLAGS: "--timestamp"
         INFOPLIST_KEY_CFBundleDisplayName: "Agent Manager X"
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.productivity
         INFOPLIST_KEY_NSHumanReadableCopyright: "Copyright (c) 2026"
-        MARKETING_VERSION: 2.5
-        CURRENT_PROJECT_VERSION: 9
+        MARKETING_VERSION: 2.6
+        CURRENT_PROJECT_VERSION: 10
 schemes:
   AgentManagerX:
     build:

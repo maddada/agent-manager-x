@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+    <channel>
+        <title>Agent Manager X</title>
+        <item>
+            <title>2.6</title>
+            <pubDate>Sat, 02 May 2026 09:12:56 +0400</pubDate>
+            <sparkle:fullReleaseNotesLink>https://github.com/maddada/agent-manager-x/releases/tag/v2.6</sparkle:fullReleaseNotesLink>
+            <sparkle:version>10</sparkle:version>
+            <sparkle:shortVersionString>2.6</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <sparkle:releaseNotesLink>https://raw.githubusercontent.com/maddada/agent-manager-x/main/AgentManagerX_2.6_aarch64.md</sparkle:releaseNotesLink>
+            <enclosure url="https://github.com/maddada/agent-manager-x/releases/download/v2.6/AgentManagerX_2.6_aarch64.dmg" length="9034524" type="application/octet-stream" sparkle:edSignature="YK/7DqtGu16PSNGcWWwDZcaKFPYEa3rdMJ7UUnOzl+9O1Xo2jfzXfZ2PJO4w7DcexDlqQfiAkLKW/PjLKqYLDA=="/>
+        </item>
+        <item>
+            <title>Version 2.5</title>
+            <link>https://github.com/maddada/agent-manager-x/releases/tag/v2.5</link>
+            <pubDate>Tue, 21 Apr 2026 00:00:00 +0000</pubDate>
+            <sparkle:version>9</sparkle:version>
+            <sparkle:shortVersionString>2.5</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0.0</sparkle:minimumSystemVersion>
+            <sparkle:fullReleaseNotesLink>https://github.com/maddada/agent-manager-x/blob/main/changelog.md</sparkle:fullReleaseNotesLink>
+            <description sparkle:format="markdown"><![CDATA[
+## 2.5
+
+### Changed
+
+- Refined the expanded mini viewer row layout so the agent icon and status indicator can swap positions on the right-side sidebar.
+- Tightened whole-card hover handling so expanded hoverable areas follow the visible row cards instead of the full panel frame.
+- Synced the bundled mini viewer resources with the latest expanded-row icon layout and project icon behavior.
+            ]]></description>
+            <enclosure url="https://github.com/maddada/agent-manager-x/releases/download/v2.5/AgentManagerX_2.5_aarch64.dmg" sparkle:edSignature="GRIH+6LgDTXKzheZJs4ia1fih4eWMAREbpE9HXTVZIR64ZT3FouVLSYNRcuA7kFY1lbEwEESccqUc/dO+CfFAg==" length="6211395" type="application/octet-stream"/>
+        </item>
+    </channel>
+</rss>

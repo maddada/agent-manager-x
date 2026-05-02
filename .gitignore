@@ -10,6 +10,7 @@ docs
 # ----- Xcode -----
 # Build artifacts
 build/
+build-x64/
 DerivedData/
 .derived-data/
 .derived-data-release-*/
