@@ -32,7 +32,7 @@ final class MiniViewerController {
     private let settings: SettingsStore
     private let fileManager: FileManager
     private var onOpenMainWindow: (() -> Void)?
-    private var onOpenVSmuxSession: ((String, String, String, String) -> Void)?
+    private var onOpenVSmuxSession: ((String, String, String, String, MuxSessionSource?) -> Void)?
     private var onCloseVSmuxSession: ((String, String) -> Void)?
 
     private let queue = DispatchQueue(label: "MiniViewerController.queue", qos: .userInteractive)
@@ -60,6 +60,7 @@ final class MiniViewerController {
     private var payloadRefreshInFlight = false
     private var payloadRefreshPending = false
     private var payloadRefreshGeneration: UInt64 = 0
+    private var lastWrittenPayload: MiniViewerPayload?
     private var latestSessionsResponse = SessionsResponse(
         sessions: [],
         backgroundSessions: [],
@@ -184,7 +185,7 @@ final class MiniViewerController {
         }
     }
 
-    func setVSmuxSessionOpenHandler(_ handler: @escaping (String, String, String, String) -> Void) {
+    func setVSmuxSessionOpenHandler(_ handler: @escaping (String, String, String, String, MuxSessionSource?) -> Void) {
         queue.async {
             self.onOpenVSmuxSession = handler
         }
@@ -330,6 +331,7 @@ final class MiniViewerController {
         payloadRefreshPending = false
         payloadRefreshInFlight = false
         payloadRefreshGeneration &+= 1
+        lastWrittenPayload = nil
 
         if let process {
             if process.isRunning {
@@ -433,21 +435,31 @@ final class MiniViewerController {
             isVisible: isVisible,
             projects: projects
         )
-        writeJSONToHelperLocked(payload)
+
+        guard lastWrittenPayload != payload else {
+            return
+        }
+
+        if writeJSONToHelperLocked(payload) {
+            lastWrittenPayload = payload
+        }
     }
 
-    private func writeJSONToHelperLocked<T: Encodable>(_ value: T) {
+    @discardableResult
+    private func writeJSONToHelperLocked<T: Encodable>(_ value: T) -> Bool {
         guard isProcessRunningLocked(),
               let stdinHandle else {
-            return
+            return false
         }
 
         do {
             var data = try JSONEncoder().encode(value)
             data.append(0x0A)
             try stdinHandle.write(contentsOf: data)
+            return true
         } catch {
             stopMiniViewerLocked()
+            return false
         }
     }
 
@@ -740,7 +752,7 @@ final class MiniViewerController {
                let workspaceId = action.vsmuxWorkspaceID {
                 let handler = onOpenVSmuxSession
                 DispatchQueue.main.async {
-                    handler?(workspaceId, action.sessionID, action.projectPath, action.projectName)
+                    handler?(workspaceId, action.sessionID, action.projectPath, action.projectName, action.muxSource)
                 }
                 return
             }
@@ -971,7 +983,7 @@ private struct CachedGitDiffStats {
     let fetchedAt: Date
 }
 
-private struct MiniViewerSessionPayload: Codable {
+private struct MiniViewerSessionPayload: Codable, Equatable {
     let id: String
     let agentType: AgentType
     let projectName: String
@@ -987,6 +999,7 @@ private struct MiniViewerSessionPayload: Codable {
     let sessionID: String
     let vsmuxThreadID: String?
     let vsmuxWorkspaceID: String?
+    let muxSource: MuxSessionSource?
 
     init(from session: Session) {
         id = session.renderID
@@ -1004,10 +1017,11 @@ private struct MiniViewerSessionPayload: Codable {
         sessionID = session.id
         vsmuxThreadID = session.vsmuxThreadID
         vsmuxWorkspaceID = session.vsmuxWorkspaceID
+        muxSource = session.muxSource
     }
 }
 
-private struct MiniViewerProjectPayload: Codable {
+private struct MiniViewerProjectPayload: Codable, Equatable {
     let projectName: String
     let projectPath: String
     var projectIconDataUrl: String?
@@ -1017,7 +1031,7 @@ private struct MiniViewerProjectPayload: Codable {
     var sessions: [MiniViewerSessionPayload]
 }
 
-private struct MiniViewerPayload: Codable {
+private struct MiniViewerPayload: Codable, Equatable {
     let side: MiniViewerSide
     let showOnActiveMonitor: Bool
     let pinnedScreenTarget: String
@@ -1037,6 +1051,7 @@ private struct MiniViewerAction: Codable {
     let projectName: String
     let sessionID: String
     let vsmuxWorkspaceID: String?
+    let muxSource: MuxSessionSource?
 }
 
 private struct MiniViewerVisibilityCommand: Codable {

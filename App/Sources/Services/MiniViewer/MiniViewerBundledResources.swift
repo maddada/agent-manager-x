@@ -92,6 +92,20 @@ private enum SessionDetailsSource: String, Codable {
     case vsmuxSessions
 }
 
+private enum MuxSessionSource: String, Codable {
+    case vsmux
+    case zmux
+
+    var displayName: String {
+        switch self {
+        case .vsmux:
+            return "vsmux"
+        case .zmux:
+            return "zmux"
+        }
+    }
+}
+
 private enum AgentType: String, Codable, Hashable {
     case claude
     case codex
@@ -116,6 +130,7 @@ private struct MiniViewerSession: Codable, Identifiable {
     let sessionID: String
     let vsmuxThreadID: String?
     let vsmuxWorkspaceID: String?
+    let muxSource: MuxSessionSource?
 }
 
 private struct MiniViewerProject: Codable, Identifiable {
@@ -157,6 +172,7 @@ private struct MiniViewerAction: Encodable {
     let projectName: String
     let sessionID: String
     let vsmuxWorkspaceID: String?
+    let muxSource: MuxSessionSource?
 }
 
 private struct BottomRoundedRectangle: Shape {
@@ -458,6 +474,14 @@ private struct SessionIconFramePreferenceKey: PreferenceKey {
     }
 }
 
+private struct MiniViewerContentHeightPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
 private extension EnvironmentValues {
     var miniViewerFontScale: CGFloat {
         get { self[MiniViewerFontScaleKey.self] }
@@ -532,7 +556,6 @@ private struct SessionRowView: View {
     let onActivate: () -> Void
     let onMiddleClick: () -> Void
     let onRightClick: () -> Void
-    @State private var isLoadingSpinActive = false
 
     private var rowHeight: CGFloat {
         56 * chromeScale
@@ -632,21 +655,9 @@ private struct SessionRowView: View {
         return "\(diff / 86400)d"
     }
 
-    private var statLine: String {
+    private var statLine: String? {
         if isVSmuxSession {
-            let threadText: String?
-            if let threadID = session.vsmuxThreadID,
-               !threadID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                threadText = "thread \(String(threadID.prefix(8)))"
-            } else {
-                threadText = nil
-            }
-
-            if let threadText {
-                return "VSmux session • \(threadText)"
-            }
-
-            return "VSmux session"
+            return nil
         }
 
         let memoryMB = Double(session.memoryBytes) / (1024.0 * 1024.0)
@@ -692,6 +703,13 @@ private struct SessionRowView: View {
             lowered.hasPrefix("<command-args>")
     }
 
+    private var loadingStatusIndicator: some View {
+        Image(systemName: "arrow.triangle.2.circlepath")
+            .miniViewerFont(size: 14, weight: .bold)
+            .foregroundStyle(activeOrange)
+            .symbolEffect(.rotate, options: .speed(1.3), isActive: true)
+    }
+
     @ViewBuilder
     private var largeStatusIndicator: some View {
         if isNewSession {
@@ -703,35 +721,9 @@ private struct SessionRowView: View {
                 .miniViewerFont(size: 14, weight: .bold)
                 .foregroundStyle(.green)
         } else if session.status == .processing {
-            Image(systemName: "arrow.triangle.2.circlepath")
-                .miniViewerFont(size: 14, weight: .bold)
-                .foregroundStyle(activeOrange)
-                .rotationEffect(.degrees(isLoadingSpinActive ? 360 : 0))
-                .animation(
-                    .linear(duration: 0.8).repeatForever(autoreverses: false),
-                    value: isLoadingSpinActive
-                )
-                .onAppear {
-                    isLoadingSpinActive = true
-                }
-                .onDisappear {
-                    isLoadingSpinActive = false
-                }
+            loadingStatusIndicator
         } else if session.status == .thinking {
-            Image(systemName: "arrow.triangle.2.circlepath")
-                .miniViewerFont(size: 14, weight: .bold)
-                .foregroundStyle(activeOrange)
-                .rotationEffect(.degrees(isLoadingSpinActive ? 360 : 0))
-                .animation(
-                    .linear(duration: 0.8).repeatForever(autoreverses: false),
-                    value: isLoadingSpinActive
-                )
-                .onAppear {
-                    isLoadingSpinActive = true
-                }
-                .onDisappear {
-                    isLoadingSpinActive = false
-                }
+            loadingStatusIndicator
         } else {
             Image(systemName: "pause.fill")
                 .miniViewerFont(size: 14, weight: .bold)
@@ -791,67 +783,71 @@ private struct SessionRowView: View {
                 )
                 .opacity(statusIndicatorOpacity)
 
-                VStack(alignment: .leading, spacing: 3 * chromeScale) {
-                    HStack(spacing: 6 * chromeScale) {
-                        if showProjectName {
-                            Text(session.projectName)
-                                .miniViewerFont(size: 12, weight: .semibold)
-                                .lineLimit(1)
+                if showDetails {
+                    VStack(alignment: .leading, spacing: 3 * chromeScale) {
+                        HStack(spacing: 6 * chromeScale) {
+                            if showProjectName {
+                                Text(session.projectName)
+                                    .miniViewerFont(size: 12, weight: .semibold)
+                                    .lineLimit(1)
+                            }
+
+                            Text(statusLabel)
+                                .miniViewerFont(size: 10, weight: .medium)
+                                .padding(.horizontal, 6 * chromeScale)
+                                .padding(.vertical, 2 * chromeScale)
+                                .background(baseTint.opacity(0.18), in: Capsule())
+
+                            if isVSmuxSession {
+                                Text(lastActivityText)
+                                    .miniViewerFont(size: 10, weight: .medium)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                            }
                         }
 
-                        Text(statusLabel)
-                            .miniViewerFont(size: 10, weight: .medium)
-                            .padding(.horizontal, 6 * chromeScale)
-                            .padding(.vertical, 2 * chromeScale)
-                            .background(baseTint.opacity(0.18), in: Capsule())
-
-                        if isVSmuxSession {
-                            Text(lastActivityText)
-                                .miniViewerFont(size: 10, weight: .medium)
+                        HStack(spacing: 0) {
+                            Text(messageLine)
+                                .miniViewerFont(size: 10)
                                 .foregroundStyle(.secondary)
                                 .lineLimit(1)
+                            Spacer(minLength: 0)
                         }
-                    }
 
-                    HStack(spacing: 0) {
-                        Text(messageLine)
-                            .miniViewerFont(size: 10)
+                        if !isVSmuxSession || session.activeSubagentCount > 0 {
+                            HStack(spacing: 7 * chromeScale) {
+                                if !isVSmuxSession {
+                                    Text(lastActivityText)
+                                }
+                                if let statLine {
+                                    Text(statLine)
+                                }
+                                if session.activeSubagentCount > 0 {
+                                    Text("+\(session.activeSubagentCount) sub")
+                                }
+                            }
+                            .miniViewerFont(size: 9, design: .monospaced)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
-                        Spacer(minLength: 0)
-                    }
-
-                    HStack(spacing: 7 * chromeScale) {
-                        if !isVSmuxSession {
-                            Text(lastActivityText)
-                        }
-                        Text(statLine)
-                        if session.activeSubagentCount > 0 {
-                            Text("+\(session.activeSubagentCount) sub")
                         }
                     }
-                    .miniViewerFont(size: 9, design: .monospaced)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                }
-                .opacity(showDetails ? 1 : 0)
 
-                Spacer(minLength: 0)
+                    Spacer(minLength: 0)
 
-                Group {
-                    if shouldSwapExpandedIcons {
-                        statusIndicator
-                    } else {
-                        agentIcon
+                    Group {
+                        if shouldSwapExpandedIcons {
+                            statusIndicator
+                        } else {
+                            agentIcon
+                        }
                     }
-                }
                     .frame(width: trailingIconSlotWidth, height: rowHeight, alignment: .center)
                     .offset(x: trailingIconOffsetX)
-                    .opacity(showDetails ? 1 : 0)
+                }
             }
             .contentShape(Rectangle())
         }
-        .padding(.horizontal, 8 * chromeScale)
+        .padding(.horizontal, (showDetails ? 8 : 7) * chromeScale)
         .frame(height: rowHeight)
         .background(
             RoundedRectangle(cornerRadius: 12 * chromeScale)
@@ -993,6 +989,7 @@ private struct MiniViewerRootView: View {
     let onMiddleClick: (MiniViewerSession) -> Void
     let onRightClick: (MiniViewerSession) -> Void
     let onIconFramesChanged: ([String: CGRect]) -> Void
+    let onContentHeightChanged: (CGFloat) -> Void
 
     private var chromeScale: CGFloat {
         model.uiElementSize.chromeScale
@@ -1030,10 +1027,21 @@ private struct MiniViewerRootView: View {
                 }
             }
             .padding(8 * chromeScale)
+            .background(
+                GeometryReader { proxy in
+                    Color.clear.preference(
+                        key: MiniViewerContentHeightPreferenceKey.self,
+                        value: proxy.size.height
+                    )
+                }
+            )
         }
         .coordinateSpace(name: "MiniViewerRoot")
         .onPreferenceChange(SessionIconFramePreferenceKey.self) { frames in
             onIconFramesChanged(frames)
+        }
+        .onPreferenceChange(MiniViewerContentHeightPreferenceKey.self) { height in
+            onContentHeightChanged(height)
         }
         .environment(\.miniViewerFontScale, model.uiElementSize.fontScale)
         .environment(\.miniViewerChromeScale, model.uiElementSize.chromeScale)
@@ -1048,6 +1056,7 @@ final class MiniViewerAppDelegate: NSObject, NSApplicationDelegate {
     private var cancellables = Set<AnyCancellable>()
     private var hoverTimer: Timer?
     private var iconFrames: [String: CGRect] = [:]
+    private var measuredContentHeight: CGFloat = 0
     private var screenParametersObserver: NSObjectProtocol?
 
     private var chromeScale: CGFloat { model.uiElementSize.chromeScale }
@@ -1112,6 +1121,10 @@ final class MiniViewerAppDelegate: NSObject, NSApplicationDelegate {
                 },
                 onIconFramesChanged: { [weak self] frames in
                     self?.iconFrames = frames
+                    self?.updateWindowFrame(animated: false)
+                },
+                onContentHeightChanged: { [weak self] height in
+                    self?.updateMeasuredContentHeight(height)
                 }
             )
         )
@@ -1167,6 +1180,25 @@ final class MiniViewerAppDelegate: NSObject, NSApplicationDelegate {
         return max(total, minHeight)
     }
 
+    private func resolvedHeight(for projects: [MiniViewerProject]) -> CGFloat {
+        let fallbackHeight = desiredHeight(for: projects)
+        guard measuredContentHeight > 0 else {
+            return fallbackHeight
+        }
+
+        return max(measuredContentHeight, minHeight)
+    }
+
+    private func updateMeasuredContentHeight(_ height: CGFloat) {
+        let normalizedHeight = max(height.rounded(.toNearestOrAwayFromZero), 0)
+        guard abs(normalizedHeight - measuredContentHeight) > 0.5 else {
+            return
+        }
+
+        measuredContentHeight = normalizedHeight
+        updateWindowFrame(animated: false)
+    }
+
     private func updateWindowFrame(animated: Bool) {
         guard let panel = window else { return }
         guard let screen = resolvedScreen() else { return }
@@ -1182,7 +1214,7 @@ final class MiniViewerAppDelegate: NSObject, NSApplicationDelegate {
         panel.ignoresMouseEvents = !model.isExpanded
 
         let width = model.isExpanded ? expandedWidth : collapsedWidth
-        let height = desiredHeight(for: model.projects)
+        let height = resolvedHeight(for: model.projects)
         let baseX = model.side == .left ? screenFrame.minX : screenFrame.maxX - width
         let x: CGFloat
         if model.isExpanded, model.side == .right {
@@ -1191,12 +1223,10 @@ final class MiniViewerAppDelegate: NSObject, NSApplicationDelegate {
             x = baseX
         }
         let centeredY = screenFrame.midY - (height / 2.0)
-        let y: CGFloat
-        if height <= screenFrame.height {
-            y = min(max(centeredY, screenFrame.minY), screenFrame.maxY - height)
-        } else {
-            y = screenFrame.minY
-        }
+        let fallbackY = height <= screenFrame.height
+            ? min(max(centeredY, screenFrame.minY), screenFrame.maxY - height)
+            : centeredY
+        let y = iconStackCenteredY(screenFrame: screenFrame) ?? fallbackY
         let frame = NSRect(x: x, y: y, width: width, height: height)
 
         // Avoid NSPanel frame animation jitter near screen edges while hovering quickly.
@@ -1205,6 +1235,30 @@ final class MiniViewerAppDelegate: NSObject, NSApplicationDelegate {
         if !panel.isVisible {
             panel.orderFrontRegardless()
         }
+    }
+
+    private func iconStackCenteredY(screenFrame: NSRect) -> CGFloat? {
+        guard let panel = window,
+              let contentView = panel.contentView,
+              !iconFrames.isEmpty else {
+            return nil
+        }
+
+        let windowRects = iconFrames.values.map { iconFrame in
+            contentView.convert(iconFrame, to: nil)
+        }
+        guard let firstRect = windowRects.first else {
+            return nil
+        }
+
+        let iconStackRect = windowRects.dropFirst().reduce(firstRect) { partial, rect in
+            partial.union(rect)
+        }
+        guard iconStackRect.height > 0 else {
+            return nil
+        }
+
+        return screenFrame.midY - iconStackRect.midY
     }
 
     private func resolvedScreen() -> NSScreen? {
@@ -1405,7 +1459,8 @@ final class MiniViewerAppDelegate: NSObject, NSApplicationDelegate {
             projectPath: session.projectPath,
             projectName: session.projectName,
             sessionID: session.sessionID,
-            vsmuxWorkspaceID: session.vsmuxWorkspaceID
+            vsmuxWorkspaceID: session.vsmuxWorkspaceID,
+            muxSource: session.muxSource
         )
 
         guard let data = try? JSONEncoder().encode(action) else {
