@@ -99,23 +99,27 @@ final class ShellCommandRunner: ShellCommandRunning {
         }
 
         let timeoutSeconds = max(0.1, timeout)
-        let deadline = Date().addingTimeInterval(timeoutSeconds)
-        var didTimeout = false
-
-        while process.isRunning && Date() < deadline {
-            Thread.sleep(forTimeInterval: 0.01)
+        let terminationGroup = DispatchGroup()
+        terminationGroup.enter()
+        process.terminationHandler = { _ in
+            terminationGroup.leave()
         }
 
-        if process.isRunning {
+        var didTimeout = false
+        if terminationGroup.wait(timeout: .now() + timeoutSeconds) == .timedOut {
             didTimeout = true
             process.terminate()
-            Thread.sleep(forTimeInterval: 0.05)
-            if process.isRunning {
+
+            if terminationGroup.wait(timeout: .now() + 0.05) == .timedOut,
+               process.isRunning {
                 kill(process.processIdentifier, SIGKILL)
             }
+
+            _ = terminationGroup.wait(timeout: .now() + 1.0)
         }
 
         process.waitUntilExit()
+        process.terminationHandler = nil
         stdoutPipe.fileHandleForReading.readabilityHandler = nil
         stderrPipe.fileHandleForReading.readabilityHandler = nil
 

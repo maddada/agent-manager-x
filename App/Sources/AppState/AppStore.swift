@@ -82,6 +82,8 @@ final class AppStore: ObservableObject {
     private var isRefreshInFlight = false
     private var hasPendingRefresh = false
     private var gitDiffStatsGeneration = 0
+    private var lastGitDiffProjectPaths: [String] = []
+    private var nextGitDiffRefreshAt: Date = .distantPast
 
     init(
         settings: SettingsStore = .shared,
@@ -145,13 +147,14 @@ final class AppStore: ObservableObject {
         self.miniViewerController.setOpenMainWindowHandler { [weak self] in
             self?.showAndFocusMainWindow()
         }
-        self.miniViewerController.setVSmuxSessionOpenHandler { [weak self] workspaceId, sessionId, projectPath, projectName in
+        self.miniViewerController.setVSmuxSessionOpenHandler { [weak self] workspaceId, sessionId, projectPath, projectName, muxSource in
             Task { @MainActor [weak self] in
                 self?.openVSmuxSession(
                     workspaceId: workspaceId,
                     sessionId: sessionId,
                     projectPath: projectPath,
-                    projectName: projectName
+                    projectName: projectName,
+                    muxSource: muxSource
                 )
             }
         }
@@ -328,7 +331,8 @@ final class AppStore: ObservableObject {
                 workspaceId: workspaceId,
                 sessionId: session.id,
                 projectPath: session.projectPath,
-                projectName: session.projectName
+                projectName: session.projectName,
+                muxSource: session.muxSource
             )
             return
         }
@@ -350,7 +354,8 @@ final class AppStore: ObservableObject {
                 workspaceId: workspaceId,
                 sessionId: session.id,
                 projectPath: session.projectPath,
-                projectName: session.projectName
+                projectName: session.projectName,
+                muxSource: session.muxSource
             )
             return
         }
@@ -1074,8 +1079,9 @@ final class AppStore: ObservableObject {
                         activeSubagentCount: 0,
                         isBackground: false,
                         detailsSource: .vsmuxSessions,
-                        vsmuxWorkspaceID: workspace.workspaceId,
+                        vsmuxWorkspaceID: workspace.brokerWorkspaceId,
                         vsmuxThreadID: session.threadId,
+                        muxSource: workspace.source,
                         projectIconDataUrl: workspace.workspaceFaviconDataUrl,
                         sessionFilePath: nil
                     )
@@ -1176,8 +1182,20 @@ final class AppStore: ObservableObject {
         workspaceId: String,
         sessionId: String,
         projectPath: String,
-        projectName: String
+        projectName: String,
+        muxSource: MuxSessionSource?
     ) {
+        /*
+         CDXC:MuxSessionFocus 2026-04-27-20:34
+         Session-card activation must open the owning mux surface. VSmux still
+         needs the editor workspace raised first, while zmux owns its native
+         workarea and should receive focus directly through the live bridge.
+         */
+        if muxSource == .zmux {
+            vsmuxSessionBroker.requestFocus(workspaceId: workspaceId, sessionId: sessionId)
+            return
+        }
+
         do {
             try coreActionsService.openInEditor(
                 path: projectPath,
@@ -1280,6 +1298,23 @@ final class AppStore: ObservableObject {
 
         let projectPaths = Array(Set(foregroundSessions.map(\.projectPath))).sorted()
         let now = Date()
+
+        if projectPaths.isEmpty {
+            lastGitDiffProjectPaths = []
+            nextGitDiffRefreshAt = now.addingTimeInterval(CachedDiffStats.ttl)
+            gitDiffCache = [:]
+            gitDiffStatsByProjectPath = [:]
+            return
+        }
+
+        if projectPaths == lastGitDiffProjectPaths,
+           now < nextGitDiffRefreshAt {
+            return
+        }
+
+        lastGitDiffProjectPaths = projectPaths
+        nextGitDiffRefreshAt = now.addingTimeInterval(CachedDiffStats.ttl)
+
         let cacheSnapshot = gitDiffCache
         let gitDiffStatsService = gitDiffStatsService
 

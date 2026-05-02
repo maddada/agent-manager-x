@@ -3,6 +3,20 @@ import Network
 
 private let vsmuxSessionBrokerPort: UInt16 = 47652
 
+enum MuxSessionSource: String, Codable, CaseIterable {
+    case vsmux
+    case zmux
+
+    var displayName: String {
+        switch self {
+        case .vsmux:
+            return "vsmux"
+        case .zmux:
+            return "zmux"
+        }
+    }
+}
+
 struct VSmuxWorkspaceSession: Codable, Hashable {
     let agent: String
     let alias: String
@@ -33,7 +47,9 @@ struct VSmuxWorkspaceSession: Codable, Hashable {
 }
 
 struct VSmuxWorkspaceSnapshot: Codable, Hashable, Identifiable {
+    let brokerWorkspaceId: String
     let sessions: [VSmuxWorkspaceSession]
+    let source: MuxSessionSource
     let updatedAt: String
     let workspaceFaviconDataUrl: String?
     let workspaceId: String
@@ -41,12 +57,25 @@ struct VSmuxWorkspaceSnapshot: Codable, Hashable, Identifiable {
     let workspacePath: String
 
     var id: String {
-        workspaceId
+        brokerWorkspaceId
+    }
+}
+
+private extension VSmuxWorkspaceSnapshot {
+    func isPresentationEquivalent(to other: VSmuxWorkspaceSnapshot) -> Bool {
+        brokerWorkspaceId == other.brokerWorkspaceId &&
+            source == other.source &&
+            workspaceId == other.workspaceId &&
+            workspaceName == other.workspaceName &&
+            workspacePath == other.workspacePath &&
+            workspaceFaviconDataUrl == other.workspaceFaviconDataUrl &&
+            sessions == other.sessions
     }
 }
 
 private struct VSmuxWorkspaceSnapshotEnvelope: Codable {
     let sessions: [VSmuxWorkspaceSession]
+    let source: MuxSessionSource?
     let type: String
     let updatedAt: String
     let workspaceFaviconDataUrl: String?
@@ -64,7 +93,7 @@ private struct VSmuxSessionCommand: Codable {
 private final class VSmuxBrokerClientConnection {
     let id = UUID()
     let connection: NWConnection
-    var workspaceId: String?
+    var brokerWorkspaceIDs = Set<String>()
 
     init(connection: NWConnection) {
         self.connection = connection
@@ -215,8 +244,21 @@ final class VSmuxSessionBroker {
             return
         }
 
+        let source = envelope.source ?? .vsmux
+        /*
+         CDXC:MuxSessionBroker 2026-04-27-19:04
+         Agent Manager must merge VSmux and zmux sessions for the same IDE
+         workspace. The publisher's workspaceId stays unchanged for commands,
+         while brokerWorkspaceId prevents equal workspace hashes from replacing
+         each other in the live session snapshot store. Native zmux can publish
+         multiple projects over one socket, so each client owns a set of broker
+         workspace IDs that are removed together when the socket disconnects.
+         */
+        let brokerWorkspaceId = Self.brokerWorkspaceId(source: source, workspaceId: envelope.workspaceId)
         let snapshot = VSmuxWorkspaceSnapshot(
+            brokerWorkspaceId: brokerWorkspaceId,
             sessions: envelope.sessions,
+            source: source,
             updatedAt: envelope.updatedAt,
             workspaceFaviconDataUrl: envelope.workspaceFaviconDataUrl,
             workspaceId: envelope.workspaceId,
@@ -224,12 +266,17 @@ final class VSmuxSessionBroker {
             workspacePath: envelope.workspacePath
         )
 
-        client.workspaceId = snapshot.workspaceId
-        workspaceByID[snapshot.workspaceId] = snapshot
-        clientIDByWorkspaceID[snapshot.workspaceId] = client.id
+        let previousSnapshot = workspaceByID[snapshot.brokerWorkspaceId]
 
-        notifyWorkspacesChangedLocked()
-        flushPendingFocusIfPossibleLocked(for: snapshot.workspaceId)
+        client.brokerWorkspaceIDs.insert(snapshot.brokerWorkspaceId)
+        workspaceByID[snapshot.brokerWorkspaceId] = snapshot
+        clientIDByWorkspaceID[snapshot.brokerWorkspaceId] = client.id
+
+        let didChangePresentation = previousSnapshot.map { !$0.isPresentationEquivalent(to: snapshot) } ?? true
+        if didChangePresentation {
+            notifyWorkspacesChangedLocked()
+        }
+        flushPendingFocusIfPossibleLocked(for: snapshot.brokerWorkspaceId)
     }
 
     private func flushPendingFocusIfPossibleLocked(for workspaceId: String) {
@@ -256,7 +303,7 @@ final class VSmuxSessionBroker {
         let command = VSmuxSessionCommand(
             sessionId: sessionId,
             type: type,
-            workspaceId: workspaceId
+            workspaceId: snapshot.workspaceId
         )
         guard let data = try? JSONEncoder().encode(command) else {
             return false
@@ -276,13 +323,16 @@ final class VSmuxSessionBroker {
         client.connection.stateUpdateHandler = nil
         client.connection.cancel()
 
-        guard let workspaceId = client.workspaceId else {
-            return
+        var didRemoveWorkspace = false
+        for brokerWorkspaceId in client.brokerWorkspaceIDs {
+            if clientIDByWorkspaceID[brokerWorkspaceId] == clientID {
+                clientIDByWorkspaceID[brokerWorkspaceId] = nil
+                workspaceByID[brokerWorkspaceId] = nil
+                didRemoveWorkspace = true
+            }
         }
 
-        if clientIDByWorkspaceID[workspaceId] == clientID {
-            clientIDByWorkspaceID[workspaceId] = nil
-            workspaceByID[workspaceId] = nil
+        if didRemoveWorkspace {
             notifyWorkspacesChangedLocked()
         }
     }
@@ -297,9 +347,13 @@ final class VSmuxSessionBroker {
     private func sortedWorkspacesLocked() -> [VSmuxWorkspaceSnapshot] {
         workspaceByID.values.sorted { left, right in
             if left.workspacePath == right.workspacePath {
-                return left.workspaceId < right.workspaceId
+                return left.brokerWorkspaceId < right.brokerWorkspaceId
             }
             return left.workspacePath < right.workspacePath
         }
+    }
+
+    private static func brokerWorkspaceId(source: MuxSessionSource, workspaceId: String) -> String {
+        "\(source.rawValue):\(workspaceId)"
     }
 }

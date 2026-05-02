@@ -31,16 +31,21 @@ enum SessionDetailsRetrievalMode: String, Codable, CaseIterable {
         case .processBased:
             return "Processes"
         case .vsmuxSessions:
-            return "VSmux"
+            /*
+             CDXC:MuxSessionSourceToggle 2026-04-27-19:04
+             The main dashboard source toggle must name both live publishers
+             because this mode now merges sessions from VSmux and zmux.
+             */
+            return "vsmux / zmux"
         }
     }
 
     var hoverDescription: String {
         switch self {
         case .processBased:
-            return "Processes reads live terminal processes and shows CPU, memory, and conversation previews. VSmux reads live sessions directly from VSmux and focuses the exact session in VS Code."
+            return "Processes reads live terminal processes and shows CPU, memory, and conversation previews. vsmux / zmux reads live sessions directly from connected mux apps and focuses the exact session."
         case .vsmuxSessions:
-            return "VSmux reads live sessions directly from VSmux and focuses the exact session in VS Code. Processes reads terminal processes instead and shows CPU, memory, and conversation previews."
+            return "vsmux / zmux reads live sessions directly from connected mux apps and focuses the exact session. Processes reads terminal processes instead and shows CPU, memory, and conversation previews."
         }
     }
 }

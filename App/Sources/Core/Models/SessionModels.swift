@@ -45,12 +45,19 @@ struct Session: Codable, Hashable, Identifiable {
     var detailsSource: SessionDetailsSource = .processBased
     var vsmuxWorkspaceID: String? = nil
     var vsmuxThreadID: String? = nil
+    var muxSource: MuxSessionSource? = nil
     var projectIconDataUrl: String? = nil
     var sessionFilePath: String? = nil
 
     /// Render-safe identity for UI lists where logical `id` may repeat across processes.
     var renderID: String {
-        "\(detailsSource.rawValue):\(vsmuxWorkspaceID ?? "none"):\(agentType.rawValue):\(pid):\(id)"
+        /*
+         CDXC:MuxSessionCards 2026-04-27-19:04
+         VSmux and zmux can publish the same workspace and session ids for a
+         repo. Include the mux source so session cards remain distinct when
+         both integrations are displayed together.
+         */
+        "\(detailsSource.rawValue):\(muxSource?.rawValue ?? "none"):\(vsmuxWorkspaceID ?? "none"):\(agentType.rawValue):\(pid):\(id)"
     }
 
     var shouldHideFromMiniViewer: Bool {

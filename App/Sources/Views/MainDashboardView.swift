@@ -865,13 +865,8 @@ private struct SessionCardView: View {
         formatTimeAgo(session.lastActivityAt)
     }
 
-    private var vsmuxMetricsLine: String? {
-        guard let threadID = session.vsmuxThreadID?.trimmingCharacters(in: .whitespacesAndNewlines),
-              !threadID.isEmpty else {
-            return nil
-        }
-
-        return "Thread \(String(threadID.prefix(8)))"
+    private var muxSessionSourceLabel: String {
+        session.muxSource?.displayName ?? "vsmux"
     }
 
     private var messagePopoverSize: CGSize {
@@ -908,7 +903,7 @@ private struct SessionCardView: View {
 
     private var metricsLine: String? {
         if isVSmuxSession {
-            return vsmuxMetricsLine
+            return nil
         }
 
         let timeAgo = lastActivityLabel
@@ -977,6 +972,12 @@ private struct SessionCardView: View {
 
                     if isVSmuxSession {
                         Text(lastActivityLabel)
+                            .font(.caption2.weight(.medium))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .layoutPriority(1)
+
+                        Text(muxSessionSourceLabel)
                             .font(.caption2.weight(.medium))
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
@@ -1064,6 +1065,8 @@ private struct SessionCardView: View {
                 }
                 .buttonStyle(.plain)
                 .focusable(false)
+                .pointerCursor()
+                .hoverPointerCursor()
                 .offset(x: -8, y: -8)
                 .opacity(isHoveringCard ? 1 : 0)
                 .allowsHitTesting(isHoveringCard)
@@ -1081,6 +1084,8 @@ private struct SessionCardView: View {
                 }
                 .buttonStyle(.plain)
                 .focusable(false)
+                .pointerCursor()
+                .hoverPointerCursor()
                 .offset(x: compact ? 6 : 10, y: compact ? 72 : 96)
                 .hoverPopover(customURL)
             }
@@ -1199,6 +1204,8 @@ private struct SessionCardView: View {
                 }
             )
         }
+        .pointerCursor()
+        .hoverPointerCursor()
     }
 }
 
