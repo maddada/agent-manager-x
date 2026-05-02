@@ -7,15 +7,36 @@ options:
 settings:
   base:
     SWIFT_VERSION: "5.9"
+packages:
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    exactVersion: 2.9.1
 targets:
   AgentManagerX:
     type: application
     platform: macOS
+    info:
+      path: App/Resources/Info.plist
+      properties:
+        CFBundleDisplayName: "Agent Manager X"
+        CFBundleShortVersionString: ${MARKETING_VERSION}
+        CFBundleVersion: ${CURRENT_PROJECT_VERSION}
+        LSApplicationCategoryType: public.app-category.productivity
+        NSHumanReadableCopyright: "Copyright (c) 2026"
+        SUAutomaticallyUpdate: true
+        SUEnableAutomaticChecks: true
+        SUEnableDownloaderService: true
+        SUEnableInstallerLauncherService: true
+        SUFeedURL: "https://raw.githubusercontent.com/maddada/agent-manager-x/main/appcast.xml"
+        SUPublicEDKey: "AGWDPeMqfhmbjt8Pbk+VTC9fDfXAYq+cZoLGCYuGn70="
+    dependencies:
+      - package: Sparkle
     sources:
       - path: App/Sources
       - path: App/Resources
         buildPhase: resources
         excludes:
+          - Info.plist
           - native-mini-viewer/**
       - path: App/Resources/native-mini-viewer
         buildPhase: resources

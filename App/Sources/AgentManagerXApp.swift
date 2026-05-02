@@ -1,7 +1,27 @@
 import AppKit
+import Combine
+import Sparkle
 import SwiftUI
 
 private final class AppDelegate: NSObject, NSApplicationDelegate {
+    private let updaterController: SPUStandardUpdaterController
+    @ObservedObject var updaterState: UpdaterState
+
+    var updater: SPUUpdater {
+        updaterController.updater
+    }
+
+    override init() {
+        let state = UpdaterState()
+        updaterState = state
+
+        let controller = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: state, userDriverDelegate: nil)
+        updaterController = controller
+        state.updater = controller.updater
+
+        super.init()
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         guard
             let url = Bundle.main.url(forResource: "AppIcon", withExtension: "icns"),
@@ -11,6 +31,37 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         NSApplication.shared.applicationIconImage = icon
+
+        if updater.automaticallyChecksForUpdates {
+            updater.checkForUpdatesInBackground()
+        }
+    }
+}
+
+private final class CheckForUpdatesViewModel: ObservableObject {
+    @Published var canCheckForUpdates = false
+
+    private var cancellable: AnyCancellable?
+
+    init(updater: SPUUpdater) {
+        cancellable = updater.publisher(for: \.canCheckForUpdates)
+            .receive(on: DispatchQueue.main)
+            .assign(to: \.canCheckForUpdates, on: self)
+    }
+}
+
+private struct CheckForUpdatesCommand: View {
+    @ObservedObject private var viewModel: CheckForUpdatesViewModel
+    private let updater: SPUUpdater
+
+    init(updater: SPUUpdater) {
+        self.updater = updater
+        viewModel = CheckForUpdatesViewModel(updater: updater)
+    }
+
+    var body: some View {
+        Button("Check for Updates…", action: updater.checkForUpdates)
+            .disabled(!viewModel.canCheckForUpdates)
     }
 }
 
@@ -23,9 +74,14 @@ struct AgentManagerXApp: App {
         WindowGroup {
             ContentView()
                 .environmentObject(store)
+                .environmentObject(appDelegate.updaterState)
                 .frame(minWidth: 900, minHeight: 620)
         }
         .commands {
+            CommandGroup(after: .appInfo) {
+                CheckForUpdatesCommand(updater: appDelegate.updater)
+            }
+
             CommandGroup(replacing: .appSettings) {
                 Button("Settings…") {
                     store.showSettings()

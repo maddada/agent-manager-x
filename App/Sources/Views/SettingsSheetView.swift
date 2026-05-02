@@ -2,6 +2,7 @@ import SwiftUI
 
 struct SettingsSheetView: View {
     @EnvironmentObject private var store: AppStore
+    @EnvironmentObject private var updaterState: UpdaterState
 
     @State private var globalHotkeyDraft = ""
     @State private var miniViewerHotkeyDraft = ""
@@ -64,6 +65,12 @@ struct SettingsSheetView: View {
                         settingsSection("Hotkeys") {
                             globalHotkeyRow
                             shortcutsReferenceRows
+                        }
+
+                        settingsDivider
+
+                        settingsSection("App Updates") {
+                            appUpdateRows
                         }
 
                         settingsDivider
@@ -455,6 +462,104 @@ struct SettingsSheetView: View {
     }
 
     // MARK: - Notifications
+
+    private var appUpdateRows: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            SettingsRow("Current Version") {
+                Text(updaterState.currentVersionDisplay)
+                    .font(.system(.callout, design: .monospaced))
+                    .foregroundStyle(.secondary)
+            }
+
+            SettingsRow("Status") {
+                HStack(spacing: 8) {
+                    if case .checking = updaterState.updateStatus {
+                        ProgressView()
+                            .controlSize(.small)
+                    }
+
+                    Text(statusLabel)
+                        .font(.callout)
+                        .foregroundStyle(statusColor)
+                }
+            }
+
+            Text(updaterState.statusSummary)
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+
+            SettingsRow("Last Checked") {
+                Text(lastCheckedLabel)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+
+            HStack(spacing: 8) {
+                Button(checkNowLabel) {
+                    updaterState.checkForUpdates()
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .disabled(!updaterState.canCheckForUpdates)
+                .focusable(false)
+                .pointerCursor()
+
+                Toggle("Automatic Checks", isOn: Binding(
+                    get: { updaterState.isAutomaticChecksEnabled },
+                    set: { _ in updaterState.toggleAutomaticChecks() }
+                ))
+                .toggleStyle(.switch)
+            }
+
+            Text("Updates now use Sparkle, matching DockDoor’s flow. When a new build is published to the appcast, Sparkle shows the changelog popup, downloads the update, installs it, and relaunches the app.")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+        }
+    }
+
+    private var checkNowLabel: String {
+        if case .checking = updaterState.updateStatus {
+            return "Checking..."
+        }
+
+        return "Check Now"
+    }
+
+    private var lastCheckedLabel: String {
+        guard let lastUpdateCheckDate = updaterState.lastUpdateCheckDate else {
+            return "Never"
+        }
+
+        return lastUpdateCheckDate.formatted(date: .abbreviated, time: .shortened)
+    }
+
+    private var statusLabel: String {
+        switch updaterState.updateStatus {
+        case .idle:
+            return "Ready"
+        case .checking:
+            return "Checking..."
+        case let .available(version):
+            return "Version \(version) available"
+        case .upToDate:
+            return "Up to date"
+        case .error:
+            return "Error"
+        }
+    }
+
+    private var statusColor: Color {
+        switch updaterState.updateStatus {
+        case .idle, .upToDate:
+            return .secondary
+        case .checking:
+            return .primary
+        case .available:
+            return .orange
+        case .error:
+            return .red
+        }
+    }
 
     private var notificationRows: some View {
         VStack(alignment: .leading, spacing: 10) {
